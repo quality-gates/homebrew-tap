@@ -37,6 +37,7 @@ on:
         type: string
 
 permissions:
+  checks: read
   contents: write
   pull-requests: write
 
@@ -163,7 +164,9 @@ jobs:
           branch_matches=false
           if [[ -n "$remote_sha" ]]; then
             git fetch origin "refs/heads/$branch"
-            if git show "$remote_sha:Formula/messgo.rb" >/tmp/branch-messgo.rb 2>/dev/null && \
+            remote_changes="$(git diff --name-only HEAD "$remote_sha")"
+            if [[ "$remote_changes" == Formula/messgo.rb ]] && \
+              git show "$remote_sha:Formula/messgo.rb" >/tmp/branch-messgo.rb 2>/dev/null && \
               cmp -s Formula/messgo.rb /tmp/branch-messgo.rb; then
               branch_matches=true
             fi
@@ -195,4 +198,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_URL: ${{ steps.pr.outputs.url }}
-        run: gh pr checks "$PR_URL" --watch --fail-fast --interval 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          checks_found=false
+          for attempt in {1..20}; do
+            check_count="$(gh pr checks "$PR_URL" --json name --jq 'length' 2>/dev/null || true)"
+            if [[ "$check_count" =~ ^[1-9][0-9]*$ ]]; then
+              checks_found=true
+              break
+            fi
+            sleep 15
+          done
+          if [[ "$checks_found" != true ]]; then
+            echo "No formula checks were registered for $PR_URL." >&2
+            exit 1
+          fi
+          gh pr checks "$PR_URL" --watch --fail-fast --interval 15
