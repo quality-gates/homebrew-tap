@@ -27,6 +27,14 @@ on:
         description: Intel release asset name
         required: true
         type: string
+      arm64_sha:
+        description: Certified Apple Silicon archive SHA-256
+        required: true
+        type: string
+      amd64_sha:
+        description: Certified Intel archive SHA-256
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -40,6 +48,7 @@ jobs:
   update:
     name: Generate formula pull request
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
         with:
@@ -56,6 +65,8 @@ jobs:
           SOURCE_SHA: ${{ inputs.source_sha }}
           ARM64_ASSET: ${{ inputs.arm64_asset }}
           AMD64_ASSET: ${{ inputs.amd64_asset }}
+          EXPECTED_ARM64_SHA: ${{ inputs.arm64_sha }}
+          EXPECTED_AMD64_SHA: ${{ inputs.amd64_sha }}
         run: |
           set -euo pipefail
           [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
@@ -64,6 +75,8 @@ jobs:
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$ARM64_ASSET" = "messgo_${VERSION}_darwin_arm64.tar.gz"
           test "$AMD64_ASSET" = "messgo_${VERSION}_darwin_amd64.tar.gz"
+          [[ "$EXPECTED_ARM64_SHA" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_AMD64_SHA" =~ ^[0-9a-f]{64}$ ]]
 
           release="$(gh api "repos/quality-gates/messgo/releases/$RELEASE_ID")"
           test "$(jq -r .tag_name <<<"$release")" = "$TAG"
@@ -94,6 +107,8 @@ jobs:
           amd64_sha="$(awk -v asset="$AMD64_ASSET" '$2 == asset { print $1 }' dist/checksums.txt)"
           [[ "$arm64_sha" =~ ^[0-9a-f]{64}$ ]]
           [[ "$amd64_sha" =~ ^[0-9a-f]{64}$ ]]
+          test "$arm64_sha" = "$EXPECTED_ARM64_SHA"
+          test "$amd64_sha" = "$EXPECTED_AMD64_SHA"
           echo "arm64_sha=$arm64_sha" >> "$GITHUB_OUTPUT"
           echo "amd64_sha=$amd64_sha" >> "$GITHUB_OUTPUT"
 
@@ -144,13 +159,22 @@ jobs:
           branch="automation/messgo-$TAG"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -B "$branch"
-          git add Formula/messgo.rb
-          git commit -m "Update messgo to $VERSION"
-
           remote_sha="$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)"
-          git push origin "HEAD:refs/heads/$branch" \
-            --force-with-lease="refs/heads/$branch:$remote_sha"
+          branch_matches=false
+          if [[ -n "$remote_sha" ]]; then
+            git fetch origin "refs/heads/$branch"
+            if git show "$remote_sha:Formula/messgo.rb" >/tmp/branch-messgo.rb 2>/dev/null && \
+              cmp -s Formula/messgo.rb /tmp/branch-messgo.rb; then
+              branch_matches=true
+            fi
+          fi
+          if [[ "$branch_matches" != true ]]; then
+            git checkout -B "$branch"
+            git add Formula/messgo.rb
+            git commit -m "Update messgo to $VERSION"
+            git push origin "HEAD:refs/heads/$branch" \
+              --force-with-lease="refs/heads/$branch:$remote_sha"
+          fi
 
           pr_url="$(gh pr list --head "$branch" --base main --state open --json url --jq '.[0].url')"
           if [[ -z "$pr_url" ]]; then
@@ -163,4 +187,12 @@ jobs:
           - Source commit: \`$SOURCE_SHA\`
           - Tap workflow: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")"
           fi
+          echo "url=$pr_url" >> "$GITHUB_OUTPUT"
           echo "Formula PR: $pr_url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for formula checks
+        if: steps.change.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+        run: gh pr checks "$PR_URL" --watch --fail-fast --interval 15

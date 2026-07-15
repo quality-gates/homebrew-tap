@@ -95,8 +95,12 @@ jobs:
           brew tap quality-gates/tap "$GITHUB_WORKSPACE"
           tap_dir="$(brew --repo quality-gates/tap)"
           if ! git -C "$tap_dir" cat-file -e "$BASE_SHA:Formula/messgo.rb" 2>/dev/null; then
-            echo "First formula publication: upgrade test is not applicable." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+            if [[ -z "$(git -C "$tap_dir" rev-list -n 1 "$BASE_SHA" -- Formula/messgo.rb)" ]]; then
+              echo "First formula publication: upgrade test is not applicable." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "The predecessor formula is missing from a tap that previously published it." >&2
+            exit 1
           fi
           git -C "$tap_dir" checkout --detach "$BASE_SHA"
           brew install quality-gates/tap/messgo
