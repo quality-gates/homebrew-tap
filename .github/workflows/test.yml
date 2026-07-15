@@ -1,0 +1,116 @@
+name: Test tap
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generator:
+    name: Test formula generator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: ruby test/render_messgo_formula_test.rb
+
+  install:
+    name: Install on ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            machine: arm64
+          - runner: macos-15-intel
+            machine: x86_64
+          - runner: macos-26
+            machine: arm64
+          - runner: macos-26-intel
+            machine: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: formula
+        run: echo "present=$([[ -f Formula/messgo.rb ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - name: Tap candidate repository
+        if: steps.formula.outputs.present == 'true'
+        run: |
+          test "$(uname -m)" = "${{ matrix.machine }}"
+          brew tap quality-gates/tap "$GITHUB_WORKSPACE"
+      - name: Audit and install
+        if: steps.formula.outputs.present == 'true'
+        run: |
+          brew audit --strict --online quality-gates/tap/messgo
+          brew style quality-gates/tap/messgo
+          brew install quality-gates/tap/messgo
+          brew test quality-gates/tap/messgo
+      - name: Run installed command
+        if: steps.formula.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(ruby -ne 'puts $1 if /^\s*version "([^"]+)"/' Formula/messgo.rb)"
+          test "$(messgo --version)" = "messgo $version"
+          cat > "$RUNNER_TEMP/smoke.go" <<'EOF'
+          package smoke
+
+          func Meaning() int { return 42 }
+          EOF
+          messgo "$RUNNER_TEMP/smoke.go" json go > "$RUNNER_TEMP/report.json"
+          test "$(jq -r .version "$RUNNER_TEMP/report.json")" = "$version"
+
+  upgrade:
+    name: Upgrade on ${{ matrix.runner }}
+    if: ${{ github.event_name == 'pull_request' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            machine: arm64
+          - runner: macos-15-intel
+            machine: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: formula
+        run: echo "present=$([[ -f Formula/messgo.rb ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - name: Install predecessor and upgrade to candidate
+        if: steps.formula.outputs.present == 'true'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "${{ matrix.machine }}"
+          candidate_sha="$(git rev-parse HEAD)"
+          brew tap quality-gates/tap "$GITHUB_WORKSPACE"
+          tap_dir="$(brew --repo quality-gates/tap)"
+          if ! git -C "$tap_dir" cat-file -e "$BASE_SHA:Formula/messgo.rb" 2>/dev/null; then
+            echo "First formula publication: upgrade test is not applicable." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git -C "$tap_dir" checkout --detach "$BASE_SHA"
+          brew install quality-gates/tap/messgo
+          previous="$(messgo --version)"
+          git -C "$tap_dir" checkout --detach "$candidate_sha"
+          brew upgrade quality-gates/tap/messgo
+          current="$(messgo --version)"
+          version="$(ruby -ne 'puts $1 if /^\s*version "([^"]+)"/' Formula/messgo.rb)"
+          test "$current" = "messgo $version"
+          test "$current" != "$previous"
+          cat > "$RUNNER_TEMP/smoke.go" <<'EOF'
+          package smoke
+
+          func Meaning() int { return 42 }
+          EOF
+          messgo "$RUNNER_TEMP/smoke.go" json go > "$RUNNER_TEMP/report.json"
+          test "$(jq -r .version "$RUNNER_TEMP/report.json")" = "$version"

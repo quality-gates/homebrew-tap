@@ -1,0 +1,166 @@
+name: Publish messgo formula
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Immutable messgo release tag
+        required: true
+        type: string
+      version:
+        description: Stable semantic version without v
+        required: true
+        type: string
+      release_id:
+        description: GitHub release database ID
+        required: true
+        type: string
+      source_sha:
+        description: Commit referenced by the release tag
+        required: true
+        type: string
+      arm64_asset:
+        description: Apple Silicon release asset name
+        required: true
+        type: string
+      amd64_asset:
+        description: Intel release asset name
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: homebrew-tap-messgo
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Generate formula pull request
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - id: release
+        name: Verify immutable upstream release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          VERSION: ${{ inputs.version }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          ARM64_ASSET: ${{ inputs.arm64_asset }}
+          AMD64_ASSET: ${{ inputs.amd64_asset }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          test "$VERSION" = "${TAG#v}"
+          [[ "$RELEASE_ID" =~ ^[0-9]+$ ]]
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$ARM64_ASSET" = "messgo_${VERSION}_darwin_arm64.tar.gz"
+          test "$AMD64_ASSET" = "messgo_${VERSION}_darwin_amd64.tar.gz"
+
+          release="$(gh api "repos/quality-gates/messgo/releases/$RELEASE_ID")"
+          test "$(jq -r .tag_name <<<"$release")" = "$TAG"
+          test "$(jq -r .draft <<<"$release")" = false
+          test "$(jq -r .prerelease <<<"$release")" = false
+          test "$(jq -r .immutable <<<"$release")" = true
+
+          ref="$(gh api "repos/quality-gates/messgo/git/ref/tags/$TAG")"
+          object_type="$(jq -r .object.type <<<"$ref")"
+          object_sha="$(jq -r .object.sha <<<"$ref")"
+          if [[ "$object_type" == tag ]]; then
+            object_sha="$(gh api "repos/quality-gates/messgo/git/tags/$object_sha" --jq .object.sha)"
+          fi
+          test "$object_sha" = "$SOURCE_SHA"
+
+          expected_assets="$(printf '%s\n' "$AMD64_ASSET" "$ARM64_ASSET" checksums.txt | LC_ALL=C sort)"
+          actual_assets="$(jq -r '[.assets[].name] | sort | .[]' <<<"$release")"
+          if [[ "$actual_assets" != "$expected_assets" ]]; then
+            echo "Unexpected release asset set." >&2
+            diff -u <(printf '%s\n' "$expected_assets") <(printf '%s\n' "$actual_assets") || true
+            exit 1
+          fi
+
+          mkdir dist
+          gh release download "$TAG" --repo quality-gates/messgo --dir dist
+          (cd dist && sha256sum -c checksums.txt)
+          arm64_sha="$(awk -v asset="$ARM64_ASSET" '$2 == asset { print $1 }' dist/checksums.txt)"
+          amd64_sha="$(awk -v asset="$AMD64_ASSET" '$2 == asset { print $1 }' dist/checksums.txt)"
+          [[ "$arm64_sha" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$amd64_sha" =~ ^[0-9a-f]{64}$ ]]
+          echo "arm64_sha=$arm64_sha" >> "$GITHUB_OUTPUT"
+          echo "amd64_sha=$amd64_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Generate deterministic formula
+        env:
+          VERSION: ${{ inputs.version }}
+          ARM64_SHA: ${{ steps.release.outputs.arm64_sha }}
+          AMD64_SHA: ${{ steps.release.outputs.amd64_sha }}
+        run: script/render-messgo-formula "$VERSION" "$ARM64_SHA" "$AMD64_SHA" Formula/messgo.rb
+
+      - id: change
+        name: Reject downgrades and detect idempotent retries
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if git show HEAD:Formula/messgo.rb >/tmp/current-messgo.rb 2>/dev/null; then
+            current_version="$(ruby -ne 'puts $1 if /^\s*version "([^"]+)"/' /tmp/current-messgo.rb)"
+            if ruby -e 'require "rubygems"; exit(Gem::Version.new(ARGV[0]) < Gem::Version.new(ARGV[1]) ? 0 : 1)' "$VERSION" "$current_version"; then
+              echo "Refusing to replace messgo $current_version with older version $VERSION." >&2
+              exit 1
+            fi
+          fi
+          if git diff --quiet -- Formula/messgo.rb; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "The default-branch formula already matches $VERSION." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Test formula generator
+        if: steps.change.outputs.changed == 'true'
+        run: ruby test/render_messgo_formula_test.rb
+
+      - id: pr
+        name: Create or update protected formula PR
+        if: steps.change.outputs.changed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          VERSION: ${{ inputs.version }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          branch="automation/messgo-$TAG"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add Formula/messgo.rb
+          git commit -m "Update messgo to $VERSION"
+
+          remote_sha="$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)"
+          git push origin "HEAD:refs/heads/$branch" \
+            --force-with-lease="refs/heads/$branch:$remote_sha"
+
+          pr_url="$(gh pr list --head "$branch" --base main --state open --json url --jq '.[0].url')"
+          if [[ -z "$pr_url" ]]; then
+            pr_url="$(gh pr create \
+              --base main --head "$branch" \
+              --title "Update messgo to $VERSION" \
+              --body "Updates the formula from immutable release [$TAG](https://github.com/quality-gates/messgo/releases/tag/$TAG).
+
+          - Release ID: \`$RELEASE_ID\`
+          - Source commit: \`$SOURCE_SHA\`
+          - Tap workflow: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")"
+          fi
+          echo "Formula PR: $pr_url" >> "$GITHUB_STEP_SUMMARY"

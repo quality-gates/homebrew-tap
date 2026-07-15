@@ -1,0 +1,58 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+module MessgoFormula
+  SHA256 = /\A[0-9a-f]{64}\z/
+  VERSION = /\A(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\z/
+
+  module_function
+
+  def render(version, arm64_sha, amd64_sha)
+    raise ArgumentError, "invalid stable semantic version" unless VERSION.match?(version)
+    raise ArgumentError, "invalid arm64 SHA-256" unless SHA256.match?(arm64_sha)
+    raise ArgumentError, "invalid amd64 SHA-256" unless SHA256.match?(amd64_sha)
+
+    <<~RUBY
+      class Messgo < Formula
+        desc "PHP Mess Detector port for Go"
+        homepage "https://github.com/quality-gates/messgo"
+        version "#{version}"
+        license "MIT"
+
+        on_macos do
+          on_arm do
+            url "https://github.com/quality-gates/messgo/releases/download/v#{version}/messgo_#{version}_darwin_arm64.tar.gz"
+            sha256 "#{arm64_sha}"
+          end
+
+          on_intel do
+            url "https://github.com/quality-gates/messgo/releases/download/v#{version}/messgo_#{version}_darwin_amd64.tar.gz"
+            sha256 "#{amd64_sha}"
+          end
+        end
+
+        def install
+          bin.install "messgo"
+          prefix.install "LICENSE"
+        end
+
+        test do
+          (testpath/"smoke.go").write <<~GO
+            package smoke
+
+            func Meaning() int { return 42 }
+          GO
+          output = shell_output("\#{bin}/messgo \#{testpath}/smoke.go json go")
+          assert_match %Q("version": "#{version}"), output
+        end
+      end
+    RUBY
+  end
+end
+
+if $PROGRAM_NAME == __FILE__
+  abort "usage: #{$PROGRAM_NAME} VERSION ARM64_SHA256 AMD64_SHA256 OUTPUT" unless ARGV.length == 4
+
+  version, arm64_sha, amd64_sha, output = ARGV
+  File.write(output, MessgoFormula.render(version, arm64_sha, amd64_sha))
+end
