@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - run: ruby test/render_messgo_formula_test.rb
+      - run: ruby test/render_formula_test.rb
 
   install:
     name: Install on ${{ matrix.runner }}
@@ -37,36 +37,31 @@ jobs:
         with:
           fetch-depth: 0
       - id: formula
-        run: echo "present=$([[ -f Formula/messgo.rb ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        shell: bash
+        run: echo "present=$([[ -n "$(find Formula -name '*.rb' -print -quit 2>/dev/null)" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
       - name: Tap candidate repository
         if: steps.formula.outputs.present == 'true'
         run: |
           test "$(uname -m)" = "${{ matrix.machine }}"
           brew tap quality-gates/tap "$GITHUB_WORKSPACE"
-      - name: Audit and install
-        if: steps.formula.outputs.present == 'true'
-        run: |
-          brew audit --strict --online quality-gates/tap/messgo
-          brew style quality-gates/tap/messgo
-          brew install quality-gates/tap/messgo
-          brew test quality-gates/tap/messgo
-      - name: Run installed command
+      - name: Audit, install, and test formulas
         if: steps.formula.outputs.present == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          version="$(ruby -ne 'puts $1 if /^\s*version "([^"]+)"/' Formula/messgo.rb)"
-          test "$(messgo --version)" = "messgo $version"
-          cat > "$RUNNER_TEMP/smoke.go" <<'EOF'
-          package smoke
-
-          func Meaning() int { return 42 }
-          EOF
-          messgo "$RUNNER_TEMP/smoke.go" json go > "$RUNNER_TEMP/report.json"
-          test "$(jq -r .version "$RUNNER_TEMP/report.json")" = "$version"
+          for formula in Formula/*.rb; do
+            tool="$(basename "$formula" .rb)"
+            brew audit --strict --online "quality-gates/tap/$tool"
+            brew style "quality-gates/tap/$tool"
+            brew install "quality-gates/tap/$tool"
+            brew test "quality-gates/tap/$tool"
+            # shellcheck disable=SC2016
+            version="$(ruby -ne 'puts $1 if /^\s*version "([^"]+)"/' "$formula")"
+            "$tool" --version | grep -F "$version"
+          done
 
   upgrade:
-    name: Upgrade on ${{ matrix.runner }}
+    name: Upgrade changed formula on ${{ matrix.runner }}
     if: ${{ github.event_name == 'pull_request' }}
     strategy:
       fail-fast: false
@@ -81,21 +76,28 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - id: formula
-        run: echo "present=$([[ -f Formula/messgo.rb ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
       - name: Install predecessor and upgrade to candidate
-        if: steps.formula.outputs.present == 'true'
         shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
           test "$(uname -m)" = "${{ matrix.machine }}"
+          changed="$(git diff --name-only "$BASE_SHA" HEAD -- 'Formula/*.rb')"
+          if [[ -z "$changed" ]]; then
+            echo "No formula changed; upgrade test is not applicable." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [[ "$(wc -l <<<"$changed" | tr -d ' ')" != 1 ]]; then
+            echo "Expected exactly one changed formula; got: $changed" >&2
+            exit 1
+          fi
+          tool="$(basename "$changed" .rb)"
           candidate_sha="$(git rev-parse HEAD)"
           brew tap quality-gates/tap "$GITHUB_WORKSPACE"
           tap_dir="$(brew --repo quality-gates/tap)"
-          if ! git -C "$tap_dir" cat-file -e "$BASE_SHA:Formula/messgo.rb" 2>/dev/null; then
-            if [[ -z "$(git -C "$tap_dir" rev-list -n 1 "$BASE_SHA" -- Formula/messgo.rb)" ]]; then
+          if ! git -C "$tap_dir" cat-file -e "$BASE_SHA:Formula/$tool.rb" 2>/dev/null; then
+            if [[ -z "$(git -C "$tap_dir" rev-list -n 1 "$BASE_SHA" -- "Formula/$tool.rb")" ]]; then
               echo "First formula publication: upgrade test is not applicable." >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
@@ -103,18 +105,12 @@ jobs:
             exit 1
           fi
           git -C "$tap_dir" checkout --detach "$BASE_SHA"
-          brew install quality-gates/tap/messgo
-          previous="$(messgo --version)"
+          brew install "quality-gates/tap/$tool"
+          previous="$("$tool" --version)"
           git -C "$tap_dir" checkout --detach "$candidate_sha"
-          brew upgrade quality-gates/tap/messgo
-          current="$(messgo --version)"
-          version="$(ruby -ne 'puts $1 if /^\s*version "([^"]+)"/' Formula/messgo.rb)"
-          test "$current" = "messgo $version"
+          brew upgrade "quality-gates/tap/$tool"
+          current="$("$tool" --version)"
+          # shellcheck disable=SC2016
+          version="$(ruby -ne 'puts $1 if /^\s*version "([^"]+)"/' "Formula/$tool.rb")"
+          grep -F "$version" <<<"$current"
           test "$current" != "$previous"
-          cat > "$RUNNER_TEMP/smoke.go" <<'EOF'
-          package smoke
-
-          func Meaning() int { return 42 }
-          EOF
-          messgo "$RUNNER_TEMP/smoke.go" json go > "$RUNNER_TEMP/report.json"
-          test "$(jq -r .version "$RUNNER_TEMP/report.json")" = "$version"

@@ -1,10 +1,14 @@
-name: Publish messgo formula
+name: Publish mess formula
 
 on:
   workflow_dispatch:
     inputs:
+      tool:
+        description: Supported mess CLI name
+        required: true
+        type: string
       tag:
-        description: Immutable messgo release tag
+        description: Immutable mess CLI release tag
         required: true
         type: string
       version:
@@ -42,7 +46,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: homebrew-tap-messgo
+  group: homebrew-tap-${{ inputs.tool }}
   cancel-in-progress: false
 
 jobs:
@@ -51,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
 
@@ -60,6 +64,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TOOL: ${{ inputs.tool }}
           TAG: ${{ inputs.tag }}
           VERSION: ${{ inputs.version }}
           RELEASE_ID: ${{ inputs.release_id }}
@@ -70,26 +75,30 @@ jobs:
           EXPECTED_AMD64_SHA: ${{ inputs.amd64_sha }}
         run: |
           set -euo pipefail
+          case "$TOOL" in
+            messcript|messfsharp|messgo|messharp|messpy|messrust) ;;
+            *) echo "Unsupported tool: $TOOL" >&2; exit 1 ;;
+          esac
           [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
           test "$VERSION" = "${TAG#v}"
           [[ "$RELEASE_ID" =~ ^[0-9]+$ ]]
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          test "$ARM64_ASSET" = "messgo_${VERSION}_darwin_arm64.tar.gz"
-          test "$AMD64_ASSET" = "messgo_${VERSION}_darwin_amd64.tar.gz"
+          test "$ARM64_ASSET" = "${TOOL}_${VERSION}_darwin_arm64.tar.gz"
+          test "$AMD64_ASSET" = "${TOOL}_${VERSION}_darwin_amd64.tar.gz"
           [[ "$EXPECTED_ARM64_SHA" =~ ^[0-9a-f]{64}$ ]]
           [[ "$EXPECTED_AMD64_SHA" =~ ^[0-9a-f]{64}$ ]]
 
-          release="$(gh api "repos/quality-gates/messgo/releases/$RELEASE_ID")"
+          release="$(gh api "repos/quality-gates/$TOOL/releases/$RELEASE_ID")"
           test "$(jq -r .tag_name <<<"$release")" = "$TAG"
           test "$(jq -r .draft <<<"$release")" = false
           test "$(jq -r .prerelease <<<"$release")" = false
           test "$(jq -r .immutable <<<"$release")" = true
 
-          ref="$(gh api "repos/quality-gates/messgo/git/ref/tags/$TAG")"
+          ref="$(gh api "repos/quality-gates/$TOOL/git/ref/tags/$TAG")"
           object_type="$(jq -r .object.type <<<"$ref")"
           object_sha="$(jq -r .object.sha <<<"$ref")"
           if [[ "$object_type" == tag ]]; then
-            object_sha="$(gh api "repos/quality-gates/messgo/git/tags/$object_sha" --jq .object.sha)"
+            object_sha="$(gh api "repos/quality-gates/$TOOL/git/tags/$object_sha" --jq .object.sha)"
           fi
           test "$object_sha" = "$SOURCE_SHA"
 
@@ -102,7 +111,7 @@ jobs:
           fi
 
           mkdir dist
-          gh release download "$TAG" --repo quality-gates/messgo --dir dist
+          gh release download "$TAG" --repo "quality-gates/$TOOL" --dir dist
           (cd dist && sha256sum -c checksums.txt)
           arm64_sha="$(awk -v asset="$ARM64_ASSET" '$2 == asset { print $1 }' dist/checksums.txt)"
           amd64_sha="$(awk -v asset="$AMD64_ASSET" '$2 == asset { print $1 }' dist/checksums.txt)"
@@ -115,26 +124,30 @@ jobs:
 
       - name: Generate deterministic formula
         env:
+          TOOL: ${{ inputs.tool }}
           VERSION: ${{ inputs.version }}
           ARM64_SHA: ${{ steps.release.outputs.arm64_sha }}
           AMD64_SHA: ${{ steps.release.outputs.amd64_sha }}
-        run: script/render-messgo-formula "$VERSION" "$ARM64_SHA" "$AMD64_SHA" Formula/messgo.rb
+        run: script/render-formula "$TOOL" "$VERSION" "$ARM64_SHA" "$AMD64_SHA" "Formula/$TOOL.rb"
 
       - id: change
         name: Reject downgrades and detect idempotent retries
         shell: bash
         env:
+          TOOL: ${{ inputs.tool }}
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          if git show HEAD:Formula/messgo.rb >/tmp/current-messgo.rb 2>/dev/null; then
-            current_version="$(ruby -ne 'puts $1 if /^\s*version "([^"]+)"/' /tmp/current-messgo.rb)"
+          if git show "HEAD:Formula/$TOOL.rb" >/tmp/current-formula.rb 2>/dev/null; then
+            # shellcheck disable=SC2016
+            current_version="$(ruby -ne 'puts $1 if /^\s*version "([^"]+)"/' /tmp/current-formula.rb)"
             if ruby -e 'require "rubygems"; exit(Gem::Version.new(ARGV[0]) < Gem::Version.new(ARGV[1]) ? 0 : 1)' "$VERSION" "$current_version"; then
-              echo "Refusing to replace messgo $current_version with older version $VERSION." >&2
+              echo "Refusing to replace $TOOL $current_version with older version $VERSION." >&2
               exit 1
             fi
           fi
-          if git diff --quiet -- Formula/messgo.rb; then
+          if git ls-files --error-unmatch "Formula/$TOOL.rb" >/dev/null 2>&1 && \
+            git diff --quiet -- "Formula/$TOOL.rb"; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "The default-branch formula already matches $VERSION." >> "$GITHUB_STEP_SUMMARY"
           else
@@ -143,7 +156,7 @@ jobs:
 
       - name: Test formula generator
         if: steps.change.outputs.changed == 'true'
-        run: ruby test/render_messgo_formula_test.rb
+        run: ruby test/render_formula_test.rb
 
       - id: pr
         name: Create or update protected formula PR
@@ -151,13 +164,14 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TOOL: ${{ inputs.tool }}
           TAG: ${{ inputs.tag }}
           VERSION: ${{ inputs.version }}
           RELEASE_ID: ${{ inputs.release_id }}
           SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
-          branch="automation/messgo-$TAG"
+          branch="automation/$TOOL-$TAG"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           remote_sha="$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)"
@@ -165,16 +179,16 @@ jobs:
           if [[ -n "$remote_sha" ]]; then
             git fetch origin "refs/heads/$branch"
             remote_changes="$(git diff --name-only HEAD "$remote_sha")"
-            if [[ "$remote_changes" == Formula/messgo.rb ]] && \
-              git show "$remote_sha:Formula/messgo.rb" >/tmp/branch-messgo.rb 2>/dev/null && \
-              cmp -s Formula/messgo.rb /tmp/branch-messgo.rb; then
+            if [[ "$remote_changes" == "Formula/$TOOL.rb" ]] && \
+              git show "$remote_sha:Formula/$TOOL.rb" >/tmp/branch-formula.rb 2>/dev/null && \
+              cmp -s "Formula/$TOOL.rb" /tmp/branch-formula.rb; then
               branch_matches=true
             fi
           fi
           if [[ "$branch_matches" != true ]]; then
             git checkout -B "$branch"
-            git add Formula/messgo.rb
-            git commit -m "Update messgo to $VERSION"
+            git add "Formula/$TOOL.rb"
+            git commit -m "Update $TOOL to $VERSION"
             git push origin "HEAD:refs/heads/$branch" \
               --force-with-lease="refs/heads/$branch:$remote_sha"
           fi
@@ -183,8 +197,8 @@ jobs:
           if [[ -z "$pr_url" ]]; then
             pr_url="$(gh pr create \
               --base main --head "$branch" \
-              --title "Update messgo to $VERSION" \
-              --body "Updates the formula from immutable release [$TAG](https://github.com/quality-gates/messgo/releases/tag/$TAG).
+              --title "Update $TOOL to $VERSION" \
+              --body "Updates the $TOOL formula from immutable release [$TAG](https://github.com/quality-gates/$TOOL/releases/tag/$TAG).
 
           - Release ID: \`$RELEASE_ID\`
           - Source commit: \`$SOURCE_SHA\`
@@ -202,7 +216,7 @@ jobs:
         run: |
           set -euo pipefail
           checks_found=false
-          for attempt in {1..20}; do
+          for _attempt in {1..20}; do
             check_count="$(gh pr checks "$PR_URL" --json name --jq 'length' 2>/dev/null || true)"
             if [[ "$check_count" =~ ^[1-9][0-9]*$ ]]; then
               checks_found=true
