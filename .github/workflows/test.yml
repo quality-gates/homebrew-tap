@@ -36,16 +36,13 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
-      - id: formula
-        shell: bash
-        run: echo "present=$([[ -n "$(find Formula -name '*.rb' -print -quit 2>/dev/null)" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - name: Require the complete formula inventory
+        run: ruby script/formula_inventory.rb Formula
       - name: Tap candidate repository
-        if: steps.formula.outputs.present == 'true'
         run: |
           test "$(uname -m)" = "${{ matrix.machine }}"
           brew tap quality-gates/tap "$GITHUB_WORKSPACE"
       - name: Audit, install, and test formulas
-        if: steps.formula.outputs.present == 'true'
         shell: bash
         run: |
           set -euo pipefail
