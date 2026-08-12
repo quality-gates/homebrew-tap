@@ -1,30 +1,37 @@
 # quality-gates Homebrew tap
 
-This tap distributes stable, immutable releases from
-[`quality-gates/messgo`](https://github.com/quality-gates/messgo).
+This tap distributes stable, immutable releases of the `quality-gates` mess
+detectors.
 
 ## Install
 
+Install any CLI directly from the tap:
+
 ```bash
+brew install quality-gates/tap/messcript
+brew install quality-gates/tap/messfsharp
 brew install quality-gates/tap/messgo
+brew install quality-gates/tap/messharp
+brew install quality-gates/tap/messpy
+brew install quality-gates/tap/messrust
 ```
 
-Upgrade to the latest stable release with:
+After `brew tap quality-gates/tap`, the shorter form also works:
 
 ```bash
-brew update
-brew upgrade quality-gates/tap/messgo
+brew install messcript messfsharp messgo messharp messpy messrust
 ```
 
-The formula is generated from a stable `vMAJOR.MINOR.PATCH` messgo release.
-Each release archive is selected for the host architecture and pinned by its
-SHA-256 checksum. Formula updates arrive through a protected pull request; the
-tap never accepts formula content or download URLs from the dispatch caller.
+Upgrade installed tools with `brew update` followed by `brew upgrade <tool>`.
+
+Each formula is generated from a stable `vMAJOR.MINOR.PATCH` release. The
+archive selected for the host architecture is pinned by its SHA-256 checksum.
+Formula updates arrive through protected pull requests; the tap does not accept
+formula content or download URLs from dispatch callers.
 
 ## Maintainers
 
-See a failed `Publish messgo formula` workflow for the exact release identity
-and deterministic automation branch. Rerunning the source repository's
-`Release` workflow with the same tag safely redispatches publication. A valid
-immutable GitHub release must not be deleted or changed to recover a tap
-failure.
+The `Publish mess formula` workflow records the exact release identity and
+deterministic automation branch. Rerun a source repository's `Release` workflow
+with the same tag to redispatch a failed publication. Do not delete or change a
+valid immutable GitHub release to recover a tap failure.
