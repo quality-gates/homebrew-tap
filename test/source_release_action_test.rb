@@ -33,6 +33,87 @@ class SourceReleaseActionTest < Minitest::Test
     end
   end
 
+  def test_resumes_a_draft_interrupted_after_the_nuget_package_upload
+    Dir.mktmpdir do |directory|
+      work = File.join(directory, "work")
+      dist = File.join(work, "dist")
+      FileUtils.mkdir_p(dist)
+      tool = "messfsharp"
+      version = "1.2.3"
+      package_name = "messfsharp.1.2.3.nupkg"
+      candidate = File.join(dist, package_name)
+      existing = File.join(directory, package_name)
+      create_nuget_package(candidate, "candidate-metadata")
+      create_nuget_package(existing, "existing-metadata")
+      create_release_archives(dist, tool, version)
+      File.write(File.join(dist, "SHA256SUMS"), "candidate checksum\n")
+
+      fake_bin = File.join(directory, "bin")
+      FileUtils.mkdir(fake_bin)
+      fake_gh = File.join(fake_bin, "gh")
+      log = File.join(directory, "gh.log")
+      File.write(fake_gh, <<~'BASH')
+        #!/usr/bin/env bash
+        set -euo pipefail
+        printf '%s\n' "$*" >> "$GH_LOG"
+        if [[ "$1" == api && "$*" == *'/git/ref/tags/'* ]]; then
+          printf '{"object":{"type":"commit","sha":"%s"}}\n' "$SOURCE_SHA"
+        elif [[ "$1" == api && "$*" == *'/releases/42'* && "$*" == *'--jq .immutable'* ]]; then
+          echo true
+        elif [[ "$1" == api && "$*" == *'/releases/42'* && "$*" == *'--jq [.assets'* ]]; then
+          printf '%s\n' SHA256SUMS checksums.txt \
+            messfsharp.1.2.3.nupkg \
+            messfsharp_1.2.3_darwin_amd64.tar.gz \
+            messfsharp_1.2.3_darwin_arm64.tar.gz
+        elif [[ "$1" == api && "$*" == *'/releases/42'* ]]; then
+          printf '{"tag_name":"v1.2.3","prerelease":false,"assets":[{"name":"messfsharp.1.2.3.nupkg"}]}\n'
+        elif [[ "$1" == release && "$2" == view ]]; then
+          printf '{"databaseId":42,"isDraft":true}\n'
+        elif [[ "$1" == release && "$2" == download ]]; then
+          destination=""
+          while [[ $# -gt 0 ]]; do
+            [[ "$1" == --dir ]] && destination="$2"
+            shift
+          done
+          mkdir -p "$destination"
+          cp "$EXISTING_PACKAGE" "$destination/$(basename "$EXISTING_PACKAGE")"
+        elif [[ "$1" == release && "$2" =~ ^(upload|edit|verify|verify-asset)$ ]]; then
+          exit 0
+        else
+          echo "unexpected gh call: $*" >&2
+          exit 1
+        fi
+      BASH
+      FileUtils.chmod(0o755, fake_gh)
+      output = File.join(directory, "output")
+      summary = File.join(directory, "summary")
+      source_sha = "a" * 40
+      environment = {
+        "PATH" => "#{fake_bin}:#{ENV.fetch("PATH")}",
+        "GH_LOG" => log,
+        "EXISTING_PACKAGE" => existing,
+        "SOURCE_SHA" => source_sha,
+        "GITHUB_REPOSITORY" => "quality-gates/messfsharp",
+        "GITHUB_OUTPUT" => output,
+        "GITHUB_STEP_SUMMARY" => summary,
+        "GITHUB_SERVER_URL" => "https://github.com"
+      }
+
+      _stdout, stderr, status = Open3.capture3(
+        environment,
+        File.join(ACTION_DIRECTORY, "publish"),
+        tool, "v1.2.3", version, source_sha, "false", "#{package_name}\nSHA256SUMS",
+        chdir: work
+      )
+
+      assert status.success?, stderr
+      assert_equal File.binread(existing), File.binread(candidate)
+      expected_checksum = "#{Digest::SHA256.file(existing).hexdigest}  #{package_name}\n"
+      assert_equal expected_checksum, File.read(File.join(dist, "SHA256SUMS"))
+      assert_match %r{release upload v1\.2\.3 .*/dist/SHA256SUMS}, File.read(log)
+    end
+  end
+
   def test_uploads_a_nuget_package_before_its_checksum
     stdout, stderr, status = Open3.capture3(
       File.join(ACTION_DIRECTORY, "asset-order"),
@@ -107,16 +188,30 @@ class SourceReleaseActionTest < Minitest::Test
 
   def with_release_assets(tool, version)
     Dir.mktmpdir do |directory|
-      archives = %W[
-        #{tool}_#{version}_darwin_amd64.tar.gz
-        #{tool}_#{version}_darwin_arm64.tar.gz
-      ]
-      archives.each { |archive| File.write(File.join(directory, archive), archive) }
-      checksums = archives.map do |archive|
-        "#{Digest::SHA256.file(File.join(directory, archive)).hexdigest}  #{archive}"
-      end
-      File.write(File.join(directory, "checksums.txt"), "#{checksums.join("\n")}\n")
+      create_release_archives(directory, tool, version)
       yield directory
+    end
+  end
+
+  def create_release_archives(directory, tool, version)
+    archives = %W[
+      #{tool}_#{version}_darwin_amd64.tar.gz
+      #{tool}_#{version}_darwin_arm64.tar.gz
+    ]
+    archives.each { |archive| File.write(File.join(directory, archive), archive) }
+    checksums = archives.map do |archive|
+      "#{Digest::SHA256.file(File.join(directory, archive)).hexdigest}  #{archive}"
+    end
+    File.write(File.join(directory, "checksums.txt"), "#{checksums.join("\n")}\n")
+  end
+
+  def create_nuget_package(package, metadata)
+    Dir.mktmpdir do |source|
+      FileUtils.mkdir_p(File.join(source, "lib", "net10.0"))
+      FileUtils.mkdir_p(File.join(source, "package", "services", "metadata", "core-properties"))
+      File.write(File.join(source, "lib", "net10.0", "messfsharp.dll"), "stable payload")
+      File.write(File.join(source, "package", "services", "metadata", "core-properties", "metadata.psmdcp"), metadata)
+      system("zip", "-q", "-r", package, ".", chdir: source) || raise("zip failed")
     end
   end
 
