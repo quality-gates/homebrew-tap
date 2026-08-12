@@ -21,6 +21,7 @@ if [[ "$GITHUB_REPOSITORY" != "quality-gates/$tool" ]]; then
   echo "The tool does not match the caller repository." >&2
   exit 1
 fi
+export GH_REPO="$GITHUB_REPOSITORY"
 if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ || "$version" != "${tag#v}" ]]; then
   echo "The release identity is not a stable semantic version." >&2
   exit 1

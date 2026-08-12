@@ -56,7 +56,10 @@ class SourceReleaseActionTest < Minitest::Test
         #!/usr/bin/env bash
         set -euo pipefail
         printf '%s\n' "$*" >> "$GH_LOG"
-        if [[ "$1" == api && "$*" == *'/git/ref/tags/'* ]]; then
+        if [[ "$1" == release && -z "${GH_REPO:-}" ]]; then
+          echo "release commands require explicit repository context" >&2
+          exit 1
+        elif [[ "$1" == api && "$*" == *'/git/ref/tags/'* ]]; then
           printf '{"object":{"type":"commit","sha":"%s"}}\n' "$SOURCE_SHA"
         elif [[ "$1" == api && "$*" == *'/releases/42'* && "$*" == *'--jq .immutable'* ]]; then
           echo true
