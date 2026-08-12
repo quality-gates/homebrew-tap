@@ -27,6 +27,9 @@ module ToolRegistry
       description: "Mess detector for Rust"
     }
   }.freeze
+  ANCILLARY_ASSETS = {
+    "messfsharp" => ["SHA256SUMS", "messfsharp.%{version}.nupkg"]
+  }.freeze
 
   module_function
 
@@ -45,13 +48,19 @@ module ToolRegistry
       #{tool}_#{version}_darwin_arm64.tar.gz
     ]
   end
+
+  def release_asset_names(tool, version)
+    ancillary = ANCILLARY_ASSETS.fetch(tool, []).map { |name| format(name, version: version) }
+    (archive_names(tool, version) + ["checksums.txt"] + ancillary).sort
+  end
 end
 
 if $PROGRAM_NAME == __FILE__
   command, *arguments = ARGV
 
-  valid_arity = { "list" => 0, "validate" => 1, "archives" => 2 }
-  abort "usage: #{$PROGRAM_NAME} <list|validate TOOL|archives TOOL VERSION>" unless valid_arity[command] == arguments.length
+  valid_arity = { "list" => 0, "validate" => 1, "archives" => 2, "release-assets" => 2 }
+  usage = "usage: #{$PROGRAM_NAME} <list|validate TOOL|archives TOOL VERSION|release-assets TOOL VERSION>"
+  abort usage unless valid_arity[command] == arguments.length
 
   case command
   when "list"
@@ -60,5 +69,7 @@ if $PROGRAM_NAME == __FILE__
     ToolRegistry.fetch(arguments.fetch(0))
   when "archives"
     puts ToolRegistry.archive_names(*arguments)
+  when "release-assets"
+    puts ToolRegistry.release_asset_names(*arguments)
   end
 end

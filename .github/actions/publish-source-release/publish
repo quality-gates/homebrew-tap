@@ -34,18 +34,19 @@ if [[ "$immutable_release" != true && "$immutable_release" != false ]]; then
   exit 1
 fi
 
-remote_tag_sha() {
-  local peeled refs sha
-  refs="$(git ls-remote --exit-code \
-    "https://github.com/$GITHUB_REPOSITORY.git" "refs/tags/$tag" "refs/tags/$tag^{}")"
-  peeled="$(awk '$2 ~ /\^\{\}$/ { print $1 }' <<<"$refs")"
-  sha="${peeled:-$(awk -v ref="refs/tags/$tag" '$2 == ref { print $1 }' <<<"$refs")}"
-  printf '%s\n' "$sha"
-}
-
 require_source_tag() {
-  if [[ "$(remote_tag_sha)" != "$source_sha" ]]; then
-    echo "The remote tag does not match the validated source commit." >&2
+  local object_sha object_type ref tag_object
+  ref="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag")"
+  object_type="$(jq -r .object.type <<<"$ref")"
+  object_sha="$(jq -r .object.sha <<<"$ref")"
+  for _depth in {1..8}; do
+    [[ "$object_type" == tag ]] || break
+    tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$object_sha")"
+    object_type="$(jq -r .object.type <<<"$tag_object")"
+    object_sha="$(jq -r .object.sha <<<"$tag_object")"
+  done
+  if [[ "$object_type" != commit || "$object_sha" != "$source_sha" ]]; then
+    echo "The remote tag does not resolve to the validated source commit." >&2
     exit 1
   fi
 }
@@ -125,7 +126,7 @@ else
     else
       gh release upload "$tag" "$dist/$name"
     fi
-  done < <(expected_assets)
+  done < <("$action_path/asset-order" "$tool" "$version" "$extra_assets")
 fi
 
 "$action_path/verify-assets" "$tool" "$version" "$dist" "$extra_assets"

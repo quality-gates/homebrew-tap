@@ -1,4 +1,5 @@
 name: Publish mess formula
+run-name: Publish ${{ inputs.tool }} ${{ inputs.tag }} ${{ inputs.request_id }}
 
 on:
   workflow_dispatch:
@@ -17,6 +18,10 @@ on:
         type: string
       source_sha:
         description: Commit referenced by the release tag
+        required: true
+        type: string
+      request_id:
+        description: Unique dispatch correlation ID
         required: true
         type: string
 
@@ -48,6 +53,7 @@ jobs:
           TAG: ${{ inputs.tag }}
           RELEASE_ID: ${{ inputs.release_id }}
           SOURCE_SHA: ${{ inputs.source_sha }}
+          REQUEST_ID: ${{ inputs.request_id }}
         run: |
           set -euo pipefail
           ruby script/tool_registry.rb validate "$TOOL"
@@ -55,6 +61,7 @@ jobs:
           VERSION="${TAG#v}"
           [[ "$RELEASE_ID" =~ ^[0-9]+$ ]]
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$REQUEST_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]
           ARM64_ASSET="${TOOL}_${VERSION}_darwin_arm64.tar.gz"
           AMD64_ASSET="${TOOL}_${VERSION}_darwin_amd64.tar.gz"
 
@@ -67,18 +74,22 @@ jobs:
           ref="$(gh api "repos/quality-gates/$TOOL/git/ref/tags/$TAG")"
           object_type="$(jq -r .object.type <<<"$ref")"
           object_sha="$(jq -r .object.sha <<<"$ref")"
-          if [[ "$object_type" == tag ]]; then
-            object_sha="$(gh api "repos/quality-gates/$TOOL/git/tags/$object_sha" --jq .object.sha)"
-          fi
+          for _depth in {1..8}; do
+            [[ "$object_type" == tag ]] || break
+            tag_object="$(gh api "repos/quality-gates/$TOOL/git/tags/$object_sha")"
+            object_type="$(jq -r .object.type <<<"$tag_object")"
+            object_sha="$(jq -r .object.sha <<<"$tag_object")"
+          done
+          test "$object_type" = commit
           test "$object_sha" = "$SOURCE_SHA"
 
-          actual_assets="$(jq -r '.assets[].name' <<<"$release")"
-          for required_asset in "$AMD64_ASSET" "$ARM64_ASSET" checksums.txt; do
-            if ! grep -Fxq "$required_asset" <<<"$actual_assets"; then
-              echo "The immutable release is missing $required_asset." >&2
-              exit 1
-            fi
-          done
+          expected_assets="$(ruby script/tool_registry.rb release-assets "$TOOL" "$VERSION")"
+          actual_assets="$(jq -r '[.assets[].name] | sort | .[]' <<<"$release")"
+          if [[ "$actual_assets" != "$expected_assets" ]]; then
+            echo "The immutable release does not match the registered asset contract." >&2
+            diff -u <(printf '%s\n' "$expected_assets") <(printf '%s\n' "$actual_assets") || true
+            exit 1
+          fi
 
           mkdir dist
           gh release download "$TAG" --repo "quality-gates/$TOOL" --dir dist \
