@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 3 ]]; then
+  echo "usage: $0 TOOL VERSION EXTRA_ASSETS" >&2
+  exit 64
+fi
+
+tool="$1"
+version="$2"
+extra_assets="$3"
+printf '%s\n' \
+  "${tool}_${version}_darwin_amd64.tar.gz" \
+  "${tool}_${version}_darwin_arm64.tar.gz" \
+  checksums.txt
+awk 'NF && $0 != "SHA256SUMS"' <<<"$extra_assets"
+grep -Fx SHA256SUMS <<<"$extra_assets" || true

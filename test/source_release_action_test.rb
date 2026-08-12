@@ -7,7 +7,8 @@ require "open3"
 require "tmpdir"
 
 class SourceReleaseActionTest < Minitest::Test
-  SCRIPT = File.expand_path("../.github/actions/publish-source-release/verify-assets", __dir__)
+  ACTION_DIRECTORY = File.expand_path("../.github/actions/publish-source-release", __dir__)
+  SCRIPT = File.join(ACTION_DIRECTORY, "verify-assets")
 
   def test_accepts_the_two_archives_and_checksum_manifest
     with_release_assets("messgo", "1.2.3") do |directory|
@@ -29,6 +30,64 @@ class SourceReleaseActionTest < Minitest::Test
       File.write(File.join(directory, "other.txt"), "unexpected")
 
       refute_contract directory, "messgo", "1.2.3", error: "unexpected release asset set"
+    end
+  end
+
+  def test_uploads_a_nuget_package_before_its_checksum
+    stdout, stderr, status = Open3.capture3(
+      File.join(ACTION_DIRECTORY, "asset-order"),
+      "messfsharp", "1.2.3", "messfsharp.1.2.3.nupkg\nSHA256SUMS"
+    )
+
+    assert status.success?, stderr
+    assets = stdout.lines(chomp: true)
+    assert_operator assets.index("messfsharp.1.2.3.nupkg"), :<, assets.index("SHA256SUMS")
+  end
+
+  def test_dispatch_correlates_the_standard_empty_response_with_the_created_run
+    Dir.mktmpdir do |directory|
+      fake_gh = File.join(directory, "gh")
+      log = File.join(directory, "gh.log")
+      request = File.join(directory, "request-id")
+      summary = File.join(directory, "summary")
+      File.write(fake_gh, <<~BASH)
+        #!/usr/bin/env bash
+        set -euo pipefail
+        printf '%s\\n' "$*" >> "$GH_LOG"
+        if [[ "$*" == *'/git/ref/heads/main'* ]]; then
+          printf '%040d\\n' 1
+        elif [[ "$*" == *'/dispatches'* ]]; then
+          for argument in "$@"; do
+            [[ "$argument" == "inputs[request_id]="* ]] && printf '%s\\n' "${argument#*=}" > "$REQUEST_FILE"
+          done
+        elif [[ "$*" == *'/runs'* ]]; then
+          request_id="$(cat "$REQUEST_FILE")"
+          printf '{"workflow_runs":[{"id":123,"display_title":"Publish messgo v1.2.3 %s","head_sha":"%040d","html_url":"https://github.com/quality-gates/homebrew-tap/actions/runs/123"}]}\\n' "$request_id" 1
+        elif [[ "$1" == run && "$2" == watch ]]; then
+          exit 0
+        else
+          exit 1
+        fi
+      BASH
+      FileUtils.chmod(0o755, fake_gh)
+      environment = {
+        "PATH" => "#{directory}:#{ENV.fetch("PATH")}",
+        "GH_LOG" => log,
+        "REQUEST_FILE" => request,
+        "GITHUB_STEP_SUMMARY" => summary
+      }
+
+      _stdout, stderr, status = Open3.capture3(
+        environment,
+        File.join(ACTION_DIRECTORY, "dispatch"),
+        "messgo", "v1.2.3", "42", "a" * 40
+      )
+
+      assert status.success?, stderr
+      calls = File.read(log)
+      assert_includes calls, "--method POST"
+      refute_includes calls, "return_run_details"
+      assert_includes calls, "run watch 123"
     end
   end
 

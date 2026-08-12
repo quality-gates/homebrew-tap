@@ -57,14 +57,19 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
+        TOOL: ${{ inputs.tool }}
+        TAG: ${{ inputs.tag }}
+        VERSION: ${{ inputs.version }}
+        SOURCE_SHA: ${{ inputs.source-sha }}
+        IMMUTABLE_RELEASE: ${{ inputs.immutable-release }}
         EXTRA_ASSETS: ${{ inputs.extra-assets }}
       run: >-
         "$GITHUB_ACTION_PATH/publish"
-        "${{ inputs.tool }}"
-        "${{ inputs.tag }}"
-        "${{ inputs.version }}"
-        "${{ inputs.source-sha }}"
-        "${{ inputs.immutable-release }}"
+        "$TOOL"
+        "$TAG"
+        "$VERSION"
+        "$SOURCE_SHA"
+        "$IMMUTABLE_RELEASE"
         "$EXTRA_ASSETS"
 
     - id: app-token
@@ -81,9 +86,13 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        TOOL: ${{ inputs.tool }}
+        TAG: ${{ inputs.tag }}
+        RELEASE_ID: ${{ steps.release.outputs.release_id }}
+        SOURCE_SHA: ${{ inputs.source-sha }}
       run: >-
         "$GITHUB_ACTION_PATH/dispatch"
-        "${{ inputs.tool }}"
-        "${{ inputs.tag }}"
-        "${{ steps.release.outputs.release_id }}"
-        "${{ inputs.source-sha }}"
+        "$TOOL"
+        "$TAG"
+        "$RELEASE_ID"
+        "$SOURCE_SHA"
