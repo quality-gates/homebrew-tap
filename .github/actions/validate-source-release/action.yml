@@ -1,0 +1,45 @@
+name: Validate source release
+description: Resolve and validate one stable mess CLI release identity
+
+inputs:
+  tool:
+    description: Mess CLI repository name
+    required: true
+  tag:
+    description: Stable release tag
+    required: true
+  github-token:
+    description: Caller repository token with contents read permission
+    required: true
+
+outputs:
+  version:
+    description: Stable version without v
+    value: ${{ steps.validate.outputs.version }}
+  source-sha:
+    description: Commit referenced by the release tag
+    value: ${{ steps.validate.outputs.source_sha }}
+  immutable-release:
+    description: Whether an immutable published release already exists
+    value: ${{ steps.validate.outputs.immutable_release }}
+
+runs:
+  using: composite
+  steps:
+    - id: validate
+      name: Resolve the stable release identity
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        TOOL: ${{ inputs.tool }}
+        TAG: ${{ inputs.tag }}
+        EVENT_NAME: ${{ github.event_name }}
+        REF_TYPE: ${{ github.ref_type }}
+        EVENT_SHA: ${{ github.sha }}
+      run: >-
+        "$GITHUB_ACTION_PATH/validate"
+        "$TOOL"
+        "$TAG"
+        "$EVENT_NAME"
+        "$REF_TYPE"
+        "$EVENT_SHA"
