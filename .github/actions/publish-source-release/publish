@@ -93,7 +93,7 @@ if [[ "$is_draft" != true ]]; then
 else
   "$action_path/verify-assets" "$tool" "$version" "$dist" "$extra_assets"
   draft_assets="$(jq -r '[.assets[].name] | sort | .[]' <<<"$release_state")"
-  unexpected_assets="$(comm -13 <(expected_assets) <(printf '%s\n' "$draft_assets"))"
+  unexpected_assets="$(LC_ALL=C comm -13 <(expected_assets) <(printf '%s\n' "$draft_assets"))"
   if [[ -n "$unexpected_assets" ]]; then
     echo "The draft contains an unexpected asset." >&2
     printf '%s\n' "$unexpected_assets" >&2
