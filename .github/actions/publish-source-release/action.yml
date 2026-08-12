@@ -1,0 +1,89 @@
+name: Publish immutable source release
+description: Reconcile one verified mess CLI release and dispatch its Homebrew formula update
+
+inputs:
+  tool:
+    description: Mess CLI repository and executable name
+    required: true
+  tag:
+    description: Stable release tag
+    required: true
+  version:
+    description: Stable version without v
+    required: true
+  source-sha:
+    description: Commit referenced by the release tag
+    required: true
+  immutable-release:
+    description: Whether validation found the immutable release
+    required: true
+  extra-assets:
+    description: Newline-separated ancillary GitHub release assets
+    required: false
+    default: ""
+  github-token:
+    description: Caller repository token with contents write permission
+    required: true
+  tap-app-id:
+    description: GitHub App ID restricted to the Homebrew tap
+    required: true
+  tap-app-private-key:
+    description: GitHub App private key restricted to the Homebrew tap
+    required: true
+
+outputs:
+  release-id:
+    description: Immutable GitHub release database ID
+    value: ${{ steps.release.outputs.release_id }}
+  arm64-sha:
+    description: ARM64 archive SHA-256
+    value: ${{ steps.release.outputs.arm64_sha }}
+  amd64-sha:
+    description: AMD64 archive SHA-256
+    value: ${{ steps.release.outputs.amd64_sha }}
+
+runs:
+  using: composite
+  steps:
+    - name: Download verified build assets
+      if: inputs.immutable-release != 'true'
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+      with:
+        name: release-assets
+        path: dist
+
+    - id: release
+      name: Reconcile the immutable source release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        EXTRA_ASSETS: ${{ inputs.extra-assets }}
+      run: >-
+        "$GITHUB_ACTION_PATH/publish"
+        "${{ inputs.tool }}"
+        "${{ inputs.tag }}"
+        "${{ inputs.version }}"
+        "${{ inputs.source-sha }}"
+        "${{ inputs.immutable-release }}"
+        "$EXTRA_ASSETS"
+
+    - id: app-token
+      name: Create a tap-scoped GitHub App token
+      uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.1
+      with:
+        app-id: ${{ inputs.tap-app-id }}
+        private-key: ${{ inputs.tap-app-private-key }}
+        owner: quality-gates
+        repositories: homebrew-tap
+        permission-actions: write
+
+    - name: Dispatch and verify the tap workflow
+      shell: bash
+      env:
+        GH_TOKEN: ${{ steps.app-token.outputs.token }}
+      run: >-
+        "$GITHUB_ACTION_PATH/dispatch"
+        "${{ inputs.tool }}"
+        "${{ inputs.tag }}"
+        "${{ steps.release.outputs.release_id }}"
+        "${{ inputs.source-sha }}"

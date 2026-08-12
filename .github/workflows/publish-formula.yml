@@ -11,32 +11,12 @@ on:
         description: Immutable mess CLI release tag
         required: true
         type: string
-      version:
-        description: Stable semantic version without v
-        required: true
-        type: string
       release_id:
         description: GitHub release database ID
         required: true
         type: string
       source_sha:
         description: Commit referenced by the release tag
-        required: true
-        type: string
-      arm64_asset:
-        description: Apple Silicon release asset name
-        required: true
-        type: string
-      amd64_asset:
-        description: Intel release asset name
-        required: true
-        type: string
-      arm64_sha:
-        description: Certified Apple Silicon archive SHA-256
-        required: true
-        type: string
-      amd64_sha:
-        description: Certified Intel archive SHA-256
         required: true
         type: string
 
@@ -66,27 +46,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TOOL: ${{ inputs.tool }}
           TAG: ${{ inputs.tag }}
-          VERSION: ${{ inputs.version }}
           RELEASE_ID: ${{ inputs.release_id }}
           SOURCE_SHA: ${{ inputs.source_sha }}
-          ARM64_ASSET: ${{ inputs.arm64_asset }}
-          AMD64_ASSET: ${{ inputs.amd64_asset }}
-          EXPECTED_ARM64_SHA: ${{ inputs.arm64_sha }}
-          EXPECTED_AMD64_SHA: ${{ inputs.amd64_sha }}
         run: |
           set -euo pipefail
-          case "$TOOL" in
-            messcript|messfsharp|messgo|messharp|messpy|messrust) ;;
-            *) echo "Unsupported tool: $TOOL" >&2; exit 1 ;;
-          esac
+          ruby script/tool_registry.rb validate "$TOOL"
           [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
-          test "$VERSION" = "${TAG#v}"
+          VERSION="${TAG#v}"
           [[ "$RELEASE_ID" =~ ^[0-9]+$ ]]
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          test "$ARM64_ASSET" = "${TOOL}_${VERSION}_darwin_arm64.tar.gz"
-          test "$AMD64_ASSET" = "${TOOL}_${VERSION}_darwin_amd64.tar.gz"
-          [[ "$EXPECTED_ARM64_SHA" =~ ^[0-9a-f]{64}$ ]]
-          [[ "$EXPECTED_AMD64_SHA" =~ ^[0-9a-f]{64}$ ]]
+          ARM64_ASSET="${TOOL}_${VERSION}_darwin_arm64.tar.gz"
+          AMD64_ASSET="${TOOL}_${VERSION}_darwin_amd64.tar.gz"
 
           release="$(gh api "repos/quality-gates/$TOOL/releases/$RELEASE_ID")"
           test "$(jq -r .tag_name <<<"$release")" = "$TAG"
@@ -102,30 +72,35 @@ jobs:
           fi
           test "$object_sha" = "$SOURCE_SHA"
 
-          expected_assets="$(printf '%s\n' "$AMD64_ASSET" "$ARM64_ASSET" checksums.txt | LC_ALL=C sort)"
-          actual_assets="$(jq -r '[.assets[].name] | sort | .[]' <<<"$release")"
-          if [[ "$actual_assets" != "$expected_assets" ]]; then
-            echo "Unexpected release asset set." >&2
-            diff -u <(printf '%s\n' "$expected_assets") <(printf '%s\n' "$actual_assets") || true
-            exit 1
-          fi
+          actual_assets="$(jq -r '.assets[].name' <<<"$release")"
+          for required_asset in "$AMD64_ASSET" "$ARM64_ASSET" checksums.txt; do
+            if ! grep -Fxq "$required_asset" <<<"$actual_assets"; then
+              echo "The immutable release is missing $required_asset." >&2
+              exit 1
+            fi
+          done
 
           mkdir dist
-          gh release download "$TAG" --repo "quality-gates/$TOOL" --dir dist
+          gh release download "$TAG" --repo "quality-gates/$TOOL" --dir dist \
+            --pattern "$AMD64_ASSET" --pattern "$ARM64_ASSET" --pattern checksums.txt
+          expected_manifest="$(printf '%s\n' "$AMD64_ASSET" "$ARM64_ASSET" | LC_ALL=C sort)"
+          manifest_assets="$(awk 'NF == 2 { sub(/^\*/, "", $2); print $2 }' dist/checksums.txt | LC_ALL=C sort)"
+          test "$manifest_assets" = "$expected_manifest"
           (cd dist && sha256sum -c checksums.txt)
           arm64_sha="$(awk -v asset="$ARM64_ASSET" '$2 == asset { print $1 }' dist/checksums.txt)"
           amd64_sha="$(awk -v asset="$AMD64_ASSET" '$2 == asset { print $1 }' dist/checksums.txt)"
           [[ "$arm64_sha" =~ ^[0-9a-f]{64}$ ]]
           [[ "$amd64_sha" =~ ^[0-9a-f]{64}$ ]]
-          test "$arm64_sha" = "$EXPECTED_ARM64_SHA"
-          test "$amd64_sha" = "$EXPECTED_AMD64_SHA"
-          echo "arm64_sha=$arm64_sha" >> "$GITHUB_OUTPUT"
-          echo "amd64_sha=$amd64_sha" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$VERSION"
+            echo "arm64_sha=$arm64_sha"
+            echo "amd64_sha=$amd64_sha"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Generate deterministic formula
         env:
           TOOL: ${{ inputs.tool }}
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ steps.release.outputs.version }}
           ARM64_SHA: ${{ steps.release.outputs.arm64_sha }}
           AMD64_SHA: ${{ steps.release.outputs.amd64_sha }}
         run: script/render-formula "$TOOL" "$VERSION" "$ARM64_SHA" "$AMD64_SHA" "Formula/$TOOL.rb"
@@ -135,7 +110,7 @@ jobs:
         shell: bash
         env:
           TOOL: ${{ inputs.tool }}
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
           if git show "HEAD:Formula/$TOOL.rb" >/tmp/current-formula.rb 2>/dev/null; then
@@ -166,7 +141,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TOOL: ${{ inputs.tool }}
           TAG: ${{ inputs.tag }}
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ steps.release.outputs.version }}
           RELEASE_ID: ${{ inputs.release_id }}
           SOURCE_SHA: ${{ inputs.source_sha }}
         run: |

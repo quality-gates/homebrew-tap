@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 6 ]]; then
+  echo "usage: $0 TOOL TAG VERSION SOURCE_SHA IMMUTABLE_RELEASE EXTRA_ASSETS" >&2
+  exit 64
+fi
+
+tool="$1"
+tag="$2"
+version="$3"
+source_sha="$4"
+immutable_release="$5"
+extra_assets="$6"
+action_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+dist="$PWD/dist"
+arm64_asset="${tool}_${version}_darwin_arm64.tar.gz"
+amd64_asset="${tool}_${version}_darwin_amd64.tar.gz"
+
+if [[ "$GITHUB_REPOSITORY" != "quality-gates/$tool" ]]; then
+  echo "The tool does not match the caller repository." >&2
+  exit 1
+fi
+if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ || "$version" != "${tag#v}" ]]; then
+  echo "The release identity is not a stable semantic version." >&2
+  exit 1
+fi
+if [[ ! "$source_sha" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "The source commit is not a full SHA." >&2
+  exit 1
+fi
+if [[ "$immutable_release" != true && "$immutable_release" != false ]]; then
+  echo "The immutable-release input must be true or false." >&2
+  exit 1
+fi
+
+remote_tag_sha() {
+  local peeled refs sha
+  refs="$(git ls-remote --exit-code \
+    "https://github.com/$GITHUB_REPOSITORY.git" "refs/tags/$tag" "refs/tags/$tag^{}")"
+  peeled="$(awk '$2 ~ /\^\{\}$/ { print $1 }' <<<"$refs")"
+  sha="${peeled:-$(awk -v ref="refs/tags/$tag" '$2 == ref { print $1 }' <<<"$refs")}"
+  printf '%s\n' "$sha"
+}
+
+require_source_tag() {
+  if [[ "$(remote_tag_sha)" != "$source_sha" ]]; then
+    echo "The remote tag does not match the validated source commit." >&2
+    exit 1
+  fi
+}
+
+expected_assets() {
+  {
+    printf '%s\n' "$amd64_asset" "$arm64_asset" checksums.txt
+    grep -v '^$' <<<"$extra_assets" || true
+  } | LC_ALL=C sort
+}
+
+require_source_tag
+
+if release="$(gh release view "$tag" --json databaseId,isDraft 2>/dev/null)"; then
+  release_id="$(jq -r .databaseId <<<"$release")"
+  is_draft="$(jq -r .isDraft <<<"$release")"
+else
+  if [[ "$immutable_release" == true ]]; then
+    echo "Validation reported an immutable release, but the release no longer exists." >&2
+    exit 1
+  fi
+  gh release create "$tag" --draft --verify-tag \
+    --title "$tool $version" --generate-notes
+  release="$(gh release view "$tag" --json databaseId,isDraft)"
+  release_id="$(jq -r .databaseId <<<"$release")"
+  is_draft="$(jq -r .isDraft <<<"$release")"
+fi
+release_api="repos/$GITHUB_REPOSITORY/releases/$release_id"
+release_state="$(gh api "$release_api")"
+test "$(jq -r .tag_name <<<"$release_state")" = "$tag"
+if [[ "$(jq -r .prerelease <<<"$release_state")" != false ]]; then
+  echo "A stable tag cannot publish a prerelease." >&2
+  exit 1
+fi
+
+if [[ "$is_draft" != true ]]; then
+  if [[ "$(jq -r .immutable <<<"$release_state")" != true ]]; then
+    echo "The existing published release is not immutable." >&2
+    exit 1
+  fi
+  rm -rf "$dist"
+  mkdir "$dist"
+  gh release download "$tag" --dir "$dist"
+else
+  "$action_path/verify-assets" "$tool" "$version" "$dist" "$extra_assets"
+  draft_assets="$(jq -r '[.assets[].name] | sort | .[]' <<<"$release_state")"
+  unexpected_assets="$(comm -13 <(expected_assets) <(printf '%s\n' "$draft_assets"))"
+  if [[ -n "$unexpected_assets" ]]; then
+    echo "The draft contains an unexpected asset." >&2
+    printf '%s\n' "$unexpected_assets" >&2
+    exit 1
+  fi
+
+  mkdir -p existing
+  while IFS= read -r package; do
+    [[ -n "$package" && "$package" == *.nupkg ]] || continue
+    if grep -Fxq "$package" <<<"$draft_assets"; then
+      gh release download "$tag" --pattern "$package" --dir existing
+      "$action_path/compare-nuget-payload" "$dist/$package" "existing/$package"
+      cp "existing/$package" "$dist/$package"
+      if grep -Fxq SHA256SUMS <<<"$extra_assets"; then
+        (cd "$dist" && sha256sum "$package" > SHA256SUMS)
+      fi
+    fi
+  done <<<"$extra_assets"
+
+  "$action_path/verify-assets" "$tool" "$version" "$dist" "$extra_assets"
+  while IFS= read -r name; do
+    if grep -Fxq "$name" <<<"$draft_assets"; then
+      if [[ ! -f "existing/$name" ]]; then
+        gh release download "$tag" --pattern "$name" --dir existing
+      fi
+      if ! cmp -s "$dist/$name" "existing/$name"; then
+        echo "Draft asset differs from the verified build: $name" >&2
+        exit 1
+      fi
+    else
+      gh release upload "$tag" "$dist/$name"
+    fi
+  done < <(expected_assets)
+fi
+
+"$action_path/verify-assets" "$tool" "$version" "$dist" "$extra_assets"
+actual_assets="$(gh api "$release_api" --jq '[.assets[].name] | sort | .[]')"
+if [[ "$actual_assets" != "$(expected_assets)" ]]; then
+  echo "The release does not contain the expected asset set." >&2
+  exit 1
+fi
+
+if [[ "$is_draft" == true ]]; then
+  require_source_tag
+  gh release edit "$tag" --draft=false --latest
+fi
+
+immutable=false
+for _attempt in {1..12}; do
+  immutable="$(gh api "$release_api" --jq .immutable)"
+  [[ "$immutable" == true ]] && break
+  sleep 5
+done
+if [[ "$immutable" != true ]]; then
+  echo "The published release is not immutable." >&2
+  exit 1
+fi
+require_source_tag
+
+gh release verify "$tag"
+while IFS= read -r name; do
+  gh release verify-asset "$tag" "$dist/$name"
+done < <(expected_assets)
+
+arm64_sha="$(awk -v asset="$arm64_asset" '$2 == asset { print $1 }' "$dist/checksums.txt")"
+amd64_sha="$(awk -v asset="$amd64_asset" '$2 == asset { print $1 }' "$dist/checksums.txt")"
+[[ "$arm64_sha" =~ ^[0-9a-f]{64}$ ]]
+[[ "$amd64_sha" =~ ^[0-9a-f]{64}$ ]]
+{
+  echo "release_id=$release_id"
+  echo "arm64_sha=$arm64_sha"
+  echo "amd64_sha=$amd64_sha"
+} >> "$GITHUB_OUTPUT"
+echo "Release: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag" >> "$GITHUB_STEP_SUMMARY"
