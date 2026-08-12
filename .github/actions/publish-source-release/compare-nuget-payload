@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 2 ]]; then
+  echo "usage: $0 CANDIDATE_NUPKG EXISTING_NUPKG" >&2
+  exit 64
+fi
+
+candidate="$1"
+existing="$2"
+temporary_directory="$(mktemp -d)"
+trap 'rm -rf "$temporary_directory"' EXIT
+
+stable_entries() {
+  unzip -Z1 "$1" \
+    | awk '!/^(_rels\/\.rels|package\/services\/metadata\/core-properties\/.*\.psmdcp|\.signature\.p7s)$/' \
+    | LC_ALL=C sort
+}
+
+stable_entries "$candidate" > "$temporary_directory/candidate"
+stable_entries "$existing" > "$temporary_directory/existing"
+cmp "$temporary_directory/candidate" "$temporary_directory/existing"
+
+while IFS= read -r entry; do
+  literal_entry="$entry"
+  literal_entry="${literal_entry//\\/\\\\}"
+  literal_entry="${literal_entry//\[/\\[}"
+  literal_entry="${literal_entry//\]/\\]}"
+  literal_entry="${literal_entry//\*/\\*}"
+  literal_entry="${literal_entry//\?/\\?}"
+  cmp <(unzip -p "$candidate" "$literal_entry") <(unzip -p "$existing" "$literal_entry")
+done < "$temporary_directory/candidate"

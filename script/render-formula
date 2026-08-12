@@ -2,42 +2,16 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require_relative "tool_registry"
 
 module MessFormula
   SHA256 = /\A[0-9a-f]{64}\z/
   VERSION = /\A(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\z/
-  TOOLS = {
-    "messcript" => {
-      class_name: "Messcript",
-      description: "Mess detector for JavaScript and TypeScript"
-    },
-    "messfsharp" => {
-      class_name: "Messfsharp",
-      description: "Mess detector for F#"
-    },
-    "messgo" => {
-      class_name: "Messgo",
-      description: "PHP Mess Detector port for Go"
-    },
-    "messharp" => {
-      class_name: "Messharp",
-      description: "Mess detector for C#"
-    },
-    "messpy" => {
-      class_name: "Messpy",
-      description: "Mess detector for Python"
-    },
-    "messrust" => {
-      class_name: "Messrust",
-      description: "Mess detector for Rust"
-    }
-  }.freeze
 
   module_function
 
   def render(tool, version, arm64_sha, amd64_sha)
-    metadata = TOOLS[tool]
-    raise ArgumentError, "unsupported tool: #{tool}" unless metadata
+    metadata = ToolRegistry.fetch(tool)
     raise ArgumentError, "invalid stable semantic version" unless VERSION.match?(version)
     raise ArgumentError, "invalid arm64 SHA-256" unless SHA256.match?(arm64_sha)
     raise ArgumentError, "invalid amd64 SHA-256" unless SHA256.match?(amd64_sha)

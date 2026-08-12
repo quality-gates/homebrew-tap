@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 4 ]]; then
+  echo "usage: $0 TOOL TAG RELEASE_ID SOURCE_SHA" >&2
+  exit 64
+fi
+
+tool="$1"
+tag="$2"
+release_id="$3"
+source_sha="$4"
+tap_repository="quality-gates/homebrew-tap"
+tap_sha="$(gh api "repos/$tap_repository/git/ref/heads/main" --jq .object.sha)"
+[[ "$tap_sha" =~ ^[0-9a-f]{40}$ ]]
+
+response="$(gh api --method POST \
+  "repos/$tap_repository/actions/workflows/publish-formula.yml/dispatches" \
+  -F return_run_details=true \
+  -f ref=main \
+  -f "inputs[tool]=$tool" \
+  -f "inputs[tag]=$tag" \
+  -f "inputs[release_id]=$release_id" \
+  -f "inputs[source_sha]=$source_sha")"
+run_id="$(jq -r .workflow_run_id <<<"$response")"
+run_url="$(jq -r .html_url <<<"$response")"
+[[ "$run_id" =~ ^[0-9]+$ ]]
+[[ "$run_url" == "https://github.com/$tap_repository/actions/runs/"* ]]
+
+run_sha="$(gh api "repos/$tap_repository/actions/runs/$run_id" --jq .head_sha)"
+if [[ "$run_sha" != "$tap_sha" ]]; then
+  echo "The dispatched tap workflow did not use the verified main commit." >&2
+  exit 1
+fi
+
+echo "Tap publication: $run_url" >> "$GITHUB_STEP_SUMMARY"
+gh run watch "$run_id" --repo "$tap_repository" --exit-status

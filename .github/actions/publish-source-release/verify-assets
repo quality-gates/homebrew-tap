@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 4 ]]; then
+  echo "usage: $0 TOOL VERSION DIST EXTRA_ASSETS" >&2
+  exit 64
+fi
+
+tool="$1"
+version="$2"
+dist="$3"
+extra_assets="$4"
+arm64_asset="${tool}_${version}_darwin_arm64.tar.gz"
+amd64_asset="${tool}_${version}_darwin_amd64.tar.gz"
+
+expected_assets="$({
+  printf '%s\n' "$amd64_asset" "$arm64_asset" checksums.txt
+  grep -v '^$' <<<"$extra_assets" || true
+} | LC_ALL=C sort)"
+actual_assets="$(find "$dist" -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort)"
+if [[ "$actual_assets" != "$expected_assets" ]]; then
+  echo "unexpected release asset set" >&2
+  diff -u <(printf '%s\n' "$expected_assets") <(printf '%s\n' "$actual_assets") >&2 || true
+  exit 1
+fi
+
+expected_manifest="$(printf '%s\n' "$amd64_asset" "$arm64_asset" | LC_ALL=C sort)"
+manifest_assets="$(awk 'NF == 2 { sub(/^\*/, "", $2); print $2 }' "$dist/checksums.txt" | LC_ALL=C sort)"
+if [[ "$manifest_assets" != "$expected_manifest" ]]; then
+  echo "unexpected Homebrew checksum manifest" >&2
+  diff -u <(printf '%s\n' "$expected_manifest") <(printf '%s\n' "$manifest_assets") >&2 || true
+  exit 1
+fi
+
+if command -v sha256sum >/dev/null; then
+  (cd "$dist" && sha256sum -c checksums.txt)
+else
+  (cd "$dist" && shasum -a 256 -c checksums.txt)
+fi
