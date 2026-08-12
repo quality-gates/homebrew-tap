@@ -1,18 +1,18 @@
 class Messharp < Formula
   desc "Mess detector for C#"
   homepage "https://github.com/quality-gates/messharp"
-  version "0.2.3"
+  version "0.2.4"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/quality-gates/messharp/releases/download/v0.2.3/messharp_0.2.3_darwin_arm64.tar.gz"
-      sha256 "91b1da29c7541b2574b13834cef220a4c9b877085ce19dd1af240a4e0e14a138"
+      url "https://github.com/quality-gates/messharp/releases/download/v0.2.4/messharp_0.2.4_darwin_arm64.tar.gz"
+      sha256 "f09f436b02d3d6a14ee66a03dce5923dbe9591c7a3b24edbdf76ecffde03bc8b"
     end
 
     on_intel do
-      url "https://github.com/quality-gates/messharp/releases/download/v0.2.3/messharp_0.2.3_darwin_amd64.tar.gz"
-      sha256 "11847b513d23d5d276ad49e5785355fd928be0611b949bd524139ac412b6b727"
+      url "https://github.com/quality-gates/messharp/releases/download/v0.2.4/messharp_0.2.4_darwin_amd64.tar.gz"
+      sha256 "5c45d94e5330bfc5114b263330805b6f4505155e07546c71c44758c204acb517"
     end
   end
 
@@ -22,6 +22,6 @@ class Messharp < Formula
   end
 
   test do
-    assert_match "0.2.3", shell_output("#{bin}/messharp --version")
+    assert_match "0.2.4", shell_output("#{bin}/messharp --version")
   end
 end
