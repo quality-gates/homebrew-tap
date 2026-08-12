@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 5 ]]; then
+  echo "usage: $0 TOOL TAG EVENT_NAME REF_TYPE EVENT_SHA" >&2
+  exit 64
+fi
+
+tool="$1"
+tag="$2"
+event_name="$3"
+ref_type="$4"
+event_sha="$5"
+
+if [[ "$GITHUB_REPOSITORY" != "quality-gates/$tool" ]]; then
+  echo "The tool does not match the caller repository." >&2
+  exit 1
+fi
+if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+  echo "Release tags must match vMAJOR.MINOR.PATCH." >&2
+  exit 1
+fi
+
+ref="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag")"
+object_type="$(jq -r .object.type <<<"$ref")"
+object_sha="$(jq -r .object.sha <<<"$ref")"
+for _depth in {1..8}; do
+  [[ "$object_type" == tag ]] || break
+  tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$object_sha")"
+  object_type="$(jq -r .object.type <<<"$tag_object")"
+  object_sha="$(jq -r .object.sha <<<"$tag_object")"
+done
+if [[ "$object_type" != commit ]]; then
+  echo "The release tag does not resolve to a commit." >&2
+  exit 1
+fi
+source_sha="$object_sha"
+
+if [[ "$event_name" == push ]]; then
+  if [[ "$ref_type" != tag || "$event_sha" != "$source_sha" ]]; then
+    echo "The tag push does not match the resolved source commit." >&2
+    exit 1
+  fi
+fi
+
+immutable_release=false
+if release="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" 2>/dev/null)"; then
+  if [[ "$(jq -r .prerelease <<<"$release")" != false ]]; then
+    echo "A stable tag cannot have a prerelease." >&2
+    exit 1
+  fi
+  if [[ "$(jq -r .draft <<<"$release")" == false && \
+        "$(jq -r .immutable <<<"$release")" == true ]]; then
+    immutable_release=true
+  fi
+fi
+
+{
+  echo "version=${tag#v}"
+  echo "source_sha=$source_sha"
+  echo "immutable_release=$immutable_release"
+} >> "$GITHUB_OUTPUT"
