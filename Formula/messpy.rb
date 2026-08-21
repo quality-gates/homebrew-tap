@@ -1,18 +1,18 @@
 class Messpy < Formula
   desc "Mess detector for Python"
   homepage "https://github.com/quality-gates/messpy"
-  version "0.1.1"
+  version "0.1.3"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/quality-gates/messpy/releases/download/v0.1.1/messpy_0.1.1_darwin_arm64.tar.gz"
-      sha256 "f5873d1f0d1cf06b0608ec5cc9759beac69f11e280a257c0cc037732861089a5"
+      url "https://github.com/quality-gates/messpy/releases/download/v0.1.3/messpy_0.1.3_darwin_arm64.tar.gz"
+      sha256 "2b48bddfd28366e85a8f4e5e3c4881f5c4cfc72031841a0bea29f4581599b367"
     end
 
     on_intel do
-      url "https://github.com/quality-gates/messpy/releases/download/v0.1.1/messpy_0.1.1_darwin_amd64.tar.gz"
-      sha256 "12155e3b9269b4649076df5bc30f557d9206135e6a2f3329f7ca18472ee6cca9"
+      url "https://github.com/quality-gates/messpy/releases/download/v0.1.3/messpy_0.1.3_darwin_amd64.tar.gz"
+      sha256 "4e56045f850410004cec7d748dcc51b3ab9eb21301b23365a2042006a5e25001"
     end
   end
 
@@ -22,6 +22,6 @@ class Messpy < Formula
   end
 
   test do
-    assert_match "0.1.1", shell_output("#{bin}/messpy --version")
+    assert_match "0.1.3", shell_output("#{bin}/messpy --version")
   end
 end
