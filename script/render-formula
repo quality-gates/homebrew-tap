@@ -21,15 +21,16 @@ module MessFormula
         desc "#{metadata.fetch(:description)}"
         homepage "https://github.com/quality-gates/#{tool}"
         license "MIT"
+        version_scheme 1
 
         on_macos do
           on_arm do
-            url "https://github.com/quality-gates/#{tool}/releases/download/v#{version}/#{tool}_#{version}_darwin_arm64.tar.gz"
+            url "https://github.com/quality-gates/#{tool}/releases/download/v#{version}/#{tool}_#{version}_darwin_arm64.tar.gz", tag: "v#{version}"
             sha256 "#{arm64_sha}"
           end
 
           on_intel do
-            url "https://github.com/quality-gates/#{tool}/releases/download/v#{version}/#{tool}_#{version}_darwin_amd64.tar.gz"
+            url "https://github.com/quality-gates/#{tool}/releases/download/v#{version}/#{tool}_#{version}_darwin_amd64.tar.gz", tag: "v#{version}"
             sha256 "#{amd64_sha}"
           end
         end
