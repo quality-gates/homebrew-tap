@@ -1,0 +1,22 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+module FormulaVersion
+  RELEASE_URL = %r{/releases/download/v([^/]+)/}
+  STABLE = /\A(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\z/
+
+  module_function
+
+  def extract(contents)
+    versions = contents.scan(RELEASE_URL).flatten.uniq
+    raise ArgumentError, "formula must reference exactly one stable release version" unless versions.one? && STABLE.match?(versions.first)
+
+    versions.first
+  end
+end
+
+if $PROGRAM_NAME == __FILE__
+  abort "usage: #{$PROGRAM_NAME} FORMULA" unless ARGV.one?
+
+  puts FormulaVersion.extract(File.read(ARGV.fetch(0)))
+end

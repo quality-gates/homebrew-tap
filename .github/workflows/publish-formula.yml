@@ -125,8 +125,7 @@ jobs:
         run: |
           set -euo pipefail
           if git show "HEAD:Formula/$TOOL.rb" >/tmp/current-formula.rb 2>/dev/null; then
-            # shellcheck disable=SC2016
-            current_version="$(ruby -ne 'puts $1 if /^\s*version "([^"]+)"/' /tmp/current-formula.rb)"
+            current_version="$(script/formula-version /tmp/current-formula.rb)"
             if ruby -e 'require "rubygems"; exit(Gem::Version.new(ARGV[0]) < Gem::Version.new(ARGV[1]) ? 0 : 1)' "$VERSION" "$current_version"; then
               echo "Refusing to replace $TOOL $current_version with older version $VERSION." >&2
               exit 1
