@@ -14,7 +14,7 @@ class RenderFormulaTest < Minitest::Test
       assert_includes formula, %(class #{ToolRegistry.fetch(tool).fetch(:class_name)} < Formula)
       refute_includes formula, %(version "1.2.3")
       assert_includes formula, "version_scheme 1"
-      assert_equal 2, formula.scan(%(tag: "v1.2.3")).length
+      assert_equal 2, formula.scan("?version=1.2.3").length
       assert_includes formula, "#{tool}_1.2.3_darwin_arm64.tar.gz"
       assert_includes formula, "#{tool}_1.2.3_darwin_amd64.tar.gz"
       assert_includes formula, %(sha256 "#{ARM64_SHA}")

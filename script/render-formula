@@ -25,12 +25,12 @@ module MessFormula
 
         on_macos do
           on_arm do
-            url "https://github.com/quality-gates/#{tool}/releases/download/v#{version}/#{tool}_#{version}_darwin_arm64.tar.gz", tag: "v#{version}"
+            url "https://github.com/quality-gates/#{tool}/releases/download/v#{version}/#{tool}_#{version}_darwin_arm64.tar.gz?version=#{version}"
             sha256 "#{arm64_sha}"
           end
 
           on_intel do
-            url "https://github.com/quality-gates/#{tool}/releases/download/v#{version}/#{tool}_#{version}_darwin_amd64.tar.gz", tag: "v#{version}"
+            url "https://github.com/quality-gates/#{tool}/releases/download/v#{version}/#{tool}_#{version}_darwin_amd64.tar.gz?version=#{version}"
             sha256 "#{amd64_sha}"
           end
         end
