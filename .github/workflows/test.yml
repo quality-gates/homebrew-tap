@@ -52,8 +52,7 @@ jobs:
             brew style "quality-gates/tap/$tool"
             brew install "quality-gates/tap/$tool"
             brew test "quality-gates/tap/$tool"
-            # shellcheck disable=SC2016
-            version="$(ruby -ne 'puts $1 if /^\s*version "([^"]+)"/' "$formula")"
+            version="$(script/formula-version "$formula")"
             "$tool" --version | grep -F "$version"
           done
 
@@ -85,10 +84,29 @@ jobs:
             echo "No formula changed; upgrade test is not applicable." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          if [[ "$(wc -l <<<"$changed" | tr -d ' ')" != 1 ]]; then
-            echo "Expected exactly one changed formula; got: $changed" >&2
+          release_formula=""
+          while IFS= read -r formula; do
+            [[ -n "$formula" ]] || continue
+            if git show "$BASE_SHA:$formula" > "$RUNNER_TEMP/base-formula.rb" 2>/dev/null; then
+              base_version="$(script/formula-version "$RUNNER_TEMP/base-formula.rb")"
+              candidate_version="$(script/formula-version "$formula")"
+              [[ "$base_version" != "$candidate_version" ]] || continue
+            fi
+            if [[ -n "$release_formula" ]]; then
+              echo "Expected exactly one formula version change; got $release_formula and $formula." >&2
+              exit 1
+            fi
+            release_formula="$formula"
+          done <<<"$changed"
+          if [[ -z "$release_formula" ]]; then
+            echo "No formula version changed; upgrade test is not applicable." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [[ ! "$release_formula" =~ ^Formula/[a-z0-9]+\.rb$ ]]; then
+            echo "Invalid release formula path: $release_formula" >&2
             exit 1
           fi
+          changed="$release_formula"
           tool="$(basename "$changed" .rb)"
           candidate_sha="$(git rev-parse HEAD)"
           brew tap quality-gates/tap "$GITHUB_WORKSPACE"
@@ -107,7 +125,6 @@ jobs:
           git -C "$tap_dir" checkout --detach "$candidate_sha"
           brew upgrade "quality-gates/tap/$tool"
           current="$("$tool" --version)"
-          # shellcheck disable=SC2016
-          version="$(ruby -ne 'puts $1 if /^\s*version "([^"]+)"/' "Formula/$tool.rb")"
+          version="$(script/formula-version "Formula/$tool.rb")"
           grep -F "$version" <<<"$current"
           test "$current" != "$previous"

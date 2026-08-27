@@ -12,7 +12,7 @@ class RenderFormulaTest < Minitest::Test
       formula = MessFormula.render(tool, "1.2.3", ARM64_SHA, AMD64_SHA)
 
       assert_includes formula, %(class #{ToolRegistry.fetch(tool).fetch(:class_name)} < Formula)
-      assert_includes formula, %(version "1.2.3")
+      refute_includes formula, %(version "1.2.3")
       assert_includes formula, "#{tool}_1.2.3_darwin_arm64.tar.gz"
       assert_includes formula, "#{tool}_1.2.3_darwin_amd64.tar.gz"
       assert_includes formula, %(sha256 "#{ARM64_SHA}")

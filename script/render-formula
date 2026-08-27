@@ -20,7 +20,6 @@ module MessFormula
       class #{metadata.fetch(:class_name)} < Formula
         desc "#{metadata.fetch(:description)}"
         homepage "https://github.com/quality-gates/#{tool}"
-        version "#{version}"
         license "MIT"
 
         on_macos do

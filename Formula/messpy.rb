@@ -1,7 +1,6 @@
 class Messpy < Formula
   desc "Mess detector for Python"
   homepage "https://github.com/quality-gates/messpy"
-  version "0.1.5"
   license "MIT"
 
   on_macos do
