@@ -1,7 +1,6 @@
 class Messfsharp < Formula
   desc "Mess detector for F#"
   homepage "https://github.com/quality-gates/messfsharp"
-  version "0.1.0"
   license "MIT"
 
   on_macos do

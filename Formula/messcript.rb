@@ -1,7 +1,6 @@
 class Messcript < Formula
   desc "Mess detector for JavaScript and TypeScript"
   homepage "https://github.com/quality-gates/messcript"
-  version "0.1.0"
   license "MIT"
 
   on_macos do

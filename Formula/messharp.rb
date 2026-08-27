@@ -1,7 +1,6 @@
 class Messharp < Formula
   desc "Mess detector for C#"
   homepage "https://github.com/quality-gates/messharp"
-  version "0.2.4"
   license "MIT"
 
   on_macos do

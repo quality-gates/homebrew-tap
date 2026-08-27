@@ -1,7 +1,6 @@
 class Messrust < Formula
   desc "Mess detector for Rust"
   homepage "https://github.com/quality-gates/messrust"
-  version "0.1.1"
   license "MIT"
 
   on_macos do

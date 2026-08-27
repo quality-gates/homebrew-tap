@@ -1,7 +1,6 @@
 class Messgo < Formula
   desc "PHP Mess Detector port for Go"
   homepage "https://github.com/quality-gates/messgo"
-  version "0.2.2"
   license "MIT"
 
   on_macos do
