@@ -1,7 +1,7 @@
 # quality-gates Homebrew tap
 
 This tap distributes stable, immutable releases of the `quality-gates` mess
-detectors.
+detectors and mutation testing tools.
 
 ## Install
 
@@ -14,12 +14,13 @@ brew install quality-gates/tap/messgo
 brew install quality-gates/tap/messharp
 brew install quality-gates/tap/messpy
 brew install quality-gates/tap/messrust
+brew install quality-gates/tap/mutago
 ```
 
 After `brew tap quality-gates/tap`, the shorter form also works:
 
 ```bash
-brew install messcript messfsharp messgo messharp messpy messrust
+brew install messcript messfsharp messgo messharp messpy messrust mutago
 ```
 
 Upgrade installed tools with `brew update` followed by `brew upgrade <tool>`.

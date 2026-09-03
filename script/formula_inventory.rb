@@ -9,7 +9,8 @@ module FormulaInventory
 
   def verify!(directory)
     actual = Dir[File.join(directory, "*.rb")].map { |path| File.basename(path, ".rb") }.sort
-    missing = ToolRegistry.names - actual
+    expected = ToolRegistry.names - ToolRegistry.pending_initial_publication(directory)
+    missing = expected - actual
     unexpected = actual - ToolRegistry.names
     return if missing.empty? && unexpected.empty?
 

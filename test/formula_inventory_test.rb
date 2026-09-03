@@ -14,6 +14,16 @@ class FormulaInventoryTest < Minitest::Test
     end
   end
 
+  def test_accepts_inventory_with_pending_initial_publication
+    Dir.mktmpdir do |directory|
+      (ToolRegistry.names - ToolRegistry.pending_initial_publication).each do |tool|
+        FileUtils.touch(File.join(directory, "#{tool}.rb"))
+      end
+
+      FormulaInventory.verify!(directory)
+    end
+  end
+
   def test_rejects_a_missing_formula
     Dir.mktmpdir do |directory|
       (ToolRegistry.names - ["messrust"]).each do |tool|

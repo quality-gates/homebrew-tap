@@ -25,16 +25,29 @@ module ToolRegistry
     "messrust" => {
       class_name: "Messrust",
       description: "Mess detector for Rust"
+    },
+    "mutago" => {
+      class_name: "Mutago",
+      description: "Mutation testing for Go"
     }
   }.freeze
   ANCILLARY_ASSETS = {
     "messfsharp" => ["SHA256SUMS", "messfsharp.%{version}.nupkg"]
   }.freeze
+  PENDING_INITIAL_PUBLICATION = %w[mutago].freeze
 
   module_function
 
   def names
     TOOLS.keys.sort
+  end
+
+  def pending_initial_publication(directory = nil)
+    return PENDING_INITIAL_PUBLICATION if directory.nil?
+
+    PENDING_INITIAL_PUBLICATION.reject do |tool|
+      File.exist?(File.join(directory, "#{tool}.rb"))
+    end
   end
 
   def fetch(tool)
