@@ -4,10 +4,21 @@ require "minitest/autorun"
 require_relative "../script/tool_registry"
 
 class ToolRegistryTest < Minitest::Test
-  EXPECTED_TOOLS = %w[messcript messfsharp messgo messharp messpy messrust].freeze
+  EXPECTED_TOOLS = %w[messcript messfsharp messgo messharp messpy messrust mutago].freeze
 
   def test_lists_the_supported_formula_inventory
     assert_equal EXPECTED_TOOLS, ToolRegistry.names
+  end
+
+  def test_records_mutago_metadata
+    assert_equal(
+      { class_name: "Mutago", description: "Mutation testing for Go" },
+      ToolRegistry.fetch("mutago")
+    )
+  end
+
+  def test_identifies_tools_pending_initial_publication
+    assert_includes ToolRegistry.pending_initial_publication, "mutago"
   end
 
   def test_derives_homebrew_release_assets
