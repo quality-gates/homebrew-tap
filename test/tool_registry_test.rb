@@ -4,7 +4,7 @@ require "minitest/autorun"
 require_relative "../script/tool_registry"
 
 class ToolRegistryTest < Minitest::Test
-  EXPECTED_TOOLS = %w[messcript messfsharp messgo messharp messpy messrust mutago].freeze
+  EXPECTED_TOOLS = %w[messcript messfsharp messgo messharp messpy messrust mutago mutarust].freeze
 
   def test_lists_the_supported_formula_inventory
     assert_equal EXPECTED_TOOLS, ToolRegistry.names

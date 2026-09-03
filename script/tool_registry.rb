@@ -29,6 +29,10 @@ module ToolRegistry
     "mutago" => {
       class_name: "Mutago",
       description: "Mutation testing for Go"
+    },
+    "mutarust" => {
+      class_name: "Mutarust",
+      description: "Mutation testing for Rust"
     }
   }.freeze
   ANCILLARY_ASSETS = {
