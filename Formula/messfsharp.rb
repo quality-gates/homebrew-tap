@@ -6,13 +6,13 @@ class Messfsharp < Formula
 
   on_macos do
     on_arm do
-      url "https://github.com/quality-gates/messfsharp/releases/download/v0.1.0/messfsharp_0.1.0_darwin_arm64.tar.gz?version=0.1.0"
-      sha256 "ffe28467034e18d89c052ffe94eafe451e78a2491ad3e94f87ebe4e4b896af36"
+      url "https://github.com/quality-gates/messfsharp/releases/download/v0.1.1/messfsharp_0.1.1_darwin_arm64.tar.gz?version=0.1.1"
+      sha256 "00839efd99b692e970507f3c98ccdc7607338f876fbdae8b0d1a67386599d318"
     end
 
     on_intel do
-      url "https://github.com/quality-gates/messfsharp/releases/download/v0.1.0/messfsharp_0.1.0_darwin_amd64.tar.gz?version=0.1.0"
-      sha256 "823855f84f467dfcdc4d9e6065997702a0e7b807389bbe0ae30a4245c4ca93ba"
+      url "https://github.com/quality-gates/messfsharp/releases/download/v0.1.1/messfsharp_0.1.1_darwin_amd64.tar.gz?version=0.1.1"
+      sha256 "27a3b29bcc0566b100f4a475c3858b079aeb420f4c6776f1ab7cd5aa1e6238cd"
     end
   end
 
@@ -22,6 +22,6 @@ class Messfsharp < Formula
   end
 
   test do
-    assert_match "0.1.0", shell_output("#{bin}/messfsharp --version")
+    assert_match "0.1.1", shell_output("#{bin}/messfsharp --version")
   end
 end
