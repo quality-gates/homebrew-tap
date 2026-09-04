@@ -196,21 +196,4 @@ jobs:
         if: steps.change.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_URL: ${{ steps.pr.outputs.url }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          checks_found=false
-          for _attempt in {1..20}; do
-            check_count="$(gh pr checks "$PR_URL" --json name --jq 'length' 2>/dev/null || true)"
-            if [[ "$check_count" =~ ^[1-9][0-9]*$ ]]; then
-              checks_found=true
-              break
-            fi
-            sleep 15
-          done
-          if [[ "$checks_found" != true ]]; then
-            echo "No formula checks were registered for $PR_URL." >&2
-            exit 1
-          fi
-          gh pr checks "$PR_URL" --watch --fail-fast --interval 15
+        run: script/wait-for-formula-checks "${{ steps.pr.outputs.url }}"

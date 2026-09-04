@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "usage: $0 PR_URL" >&2
+  exit 64
+fi
+
+pr_url="$1"
+max_attempts="${WAIT_FOR_CHECKS_ATTEMPTS:-240}"
+interval="${WAIT_FOR_CHECKS_INTERVAL:-15}"
+
+checks_found=false
+for (( attempt=1; attempt<=max_attempts; attempt++ )); do
+  check_count="$(gh pr checks "$pr_url" --json name --jq 'length' 2>/dev/null || true)"
+  if [[ "$check_count" =~ ^[1-9][0-9]*$ ]]; then
+    checks_found=true
+    break
+  fi
+  sleep "$interval"
+done
+
+if [[ "$checks_found" != true ]]; then
+  echo "No formula checks were registered for $pr_url." >&2
+  exit 1
+fi
+
+gh pr checks "$pr_url" --watch --fail-fast --interval "$interval"
