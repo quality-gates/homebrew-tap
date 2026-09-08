@@ -6,13 +6,13 @@ class Messgo < Formula
 
   on_macos do
     on_arm do
-      url "https://github.com/quality-gates/messgo/releases/download/v0.4.1/messgo_0.4.1_darwin_arm64.tar.gz?version=0.4.1"
-      sha256 "ada9fbf0cfccb58a30422142e670ccf42014a2bb1e89a25726b7aeebce064830"
+      url "https://github.com/quality-gates/messgo/releases/download/v0.4.2/messgo_0.4.2_darwin_arm64.tar.gz?version=0.4.2"
+      sha256 "430bde6cdd9f8d0348a52a10a4143d0c66bfa7775b3856f04c116fee372afad8"
     end
 
     on_intel do
-      url "https://github.com/quality-gates/messgo/releases/download/v0.4.1/messgo_0.4.1_darwin_amd64.tar.gz?version=0.4.1"
-      sha256 "9771cbed2c376d2afc156d77ae5c77e0e6d88c0fc811af337deb7d3a651313f9"
+      url "https://github.com/quality-gates/messgo/releases/download/v0.4.2/messgo_0.4.2_darwin_amd64.tar.gz?version=0.4.2"
+      sha256 "2ef1e8cb211b7cf0caf79dcaacd1fb73e0b08853d849a6d4c854e9ada371de78"
     end
   end
 
@@ -22,6 +22,6 @@ class Messgo < Formula
   end
 
   test do
-    assert_match "0.4.1", shell_output("#{bin}/messgo --version")
+    assert_match "0.4.2", shell_output("#{bin}/messgo --version")
   end
 end
