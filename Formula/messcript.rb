@@ -6,13 +6,13 @@ class Messcript < Formula
 
   on_macos do
     on_arm do
-      url "https://github.com/quality-gates/messcript/releases/download/v0.1.7/messcript_0.1.7_darwin_arm64.tar.gz?version=0.1.7"
-      sha256 "4826aa151427c93a8eda899e51d27a9d2a5520702b6622aafb4c7dfdd9435cc0"
+      url "https://github.com/quality-gates/messcript/releases/download/v0.1.8/messcript_0.1.8_darwin_arm64.tar.gz?version=0.1.8"
+      sha256 "a436d02eb19d5d10c08520c0051e1335e3b896f56119f8f12460bee0d828aaac"
     end
 
     on_intel do
-      url "https://github.com/quality-gates/messcript/releases/download/v0.1.7/messcript_0.1.7_darwin_amd64.tar.gz?version=0.1.7"
-      sha256 "9306a94a9bbf52336c19a7766b7ab381a8cad8bf5819ace6772d2befbf300740"
+      url "https://github.com/quality-gates/messcript/releases/download/v0.1.8/messcript_0.1.8_darwin_amd64.tar.gz?version=0.1.8"
+      sha256 "62dbcc5aa4ab71ad37c7cb15234d0ac4bbf62fa521b10cffdb06adf5dc4d0424"
     end
   end
 
@@ -22,6 +22,6 @@ class Messcript < Formula
   end
 
   test do
-    assert_match "0.1.7", shell_output("#{bin}/messcript --version")
+    assert_match "0.1.8", shell_output("#{bin}/messcript --version")
   end
 end
