@@ -174,8 +174,7 @@ jobs:
           if [[ "$branch_matches" != true ]]; then
             git checkout -B "$branch"
             git add "Formula/$TOOL.rb"
-            # The explicit dispatch below runs every required check without an approval wait.
-            git commit -m "Update $TOOL to $VERSION [skip ci]"
+            git commit -m "Update $TOOL to $VERSION"
             git push origin "HEAD:refs/heads/$branch" \
               --force-with-lease="refs/heads/$branch:$remote_sha"
           fi

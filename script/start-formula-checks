@@ -6,28 +6,32 @@ if [[ $# -ne 1 ]]; then
   exit 64
 fi
 
-# Dispatch explicitly: bot-created pull request runs can require approval.
-pr="$(gh pr view "$1" --json headRefName,headRefOid,baseRefOid,state)"
-[[ "$(jq -r .state <<<"$pr")" == OPEN ]]
+# Only approve checks for this repository's generated formula pull requests.
+pr="$(gh pr view "$1" --json headRefName,headRefOid,isCrossRepository,author,state)"
+jq -e '.state == "OPEN" and .isCrossRepository == false and .author.login == "app/github-actions"' <<<"$pr" >/dev/null
 branch="$(jq -r .headRefName <<<"$pr")"
 head="$(jq -r .headRefOid <<<"$pr")"
-base="$(jq -r .baseRefOid <<<"$pr")"
-git check-ref-format "refs/heads/$branch"
-[[ "$head" =~ ^[0-9a-f]{40}$ && "$base" =~ ^[0-9a-f]{40}$ ]]
-request_id="$(ruby -rsecurerandom -e 'puts SecureRandom.uuid')"
-gh workflow run test.yml --ref "$branch" -f "base_sha=$base" -f "request_id=$request_id"
+[[ "$branch" =~ ^automation/[a-z0-9]+-v[0-9]+\.[0-9]+\.[0-9]+$ && "$head" =~ ^[0-9a-f]{40}$ ]]
+approved_id=""
 
-# Wait for this dispatch and this commit, not a previous successful run.
-for (( attempt=1; attempt<=${START_CHECKS_ATTEMPTS:-20}; attempt++ )); do
-  runs="$(gh run list --workflow test.yml --event workflow_dispatch --branch "$branch" \
-    --limit 100 --json databaseId,displayTitle,headSha)"
-  run_id="$(jq -r --arg title "Test formula $request_id" --arg head "$head" \
-    '.[] | select(.displayTitle == $title and .headSha == $head) | .databaseId' <<<"$runs" | head -n 1)"
-  if [[ "$run_id" =~ ^[0-9]+$ ]]; then
-    gh run watch "$run_id" --exit-status
-    exit 0
+for (( attempt=1; attempt<=${START_CHECKS_ATTEMPTS:-240}; attempt++ )); do
+  runs="$(gh run list --workflow test.yml --event pull_request --branch "$branch" \
+    --limit 100 --json databaseId,headSha,conclusion)"
+  run="$(jq -c --arg head "$head" '[.[] | select(.headSha == $head)][0] // empty' <<<"$runs")"
+  if [[ -n "$run" ]]; then
+    run_id="$(jq -r .databaseId <<<"$run")"
+    [[ "$run_id" =~ ^[0-9]+$ ]]
+    if [[ "$(jq -r .conclusion <<<"$run")" == action_required ]]; then
+      if [[ "$approved_id" != "$run_id" ]]; then
+        gh api --method POST "repos/{owner}/{repo}/actions/runs/$run_id/approve"
+        approved_id="$run_id"
+      fi
+    else
+      gh run watch "$run_id" --exit-status
+      exit 0
+    fi
   fi
-  sleep "${START_CHECKS_INTERVAL:-3}"
+  sleep "${START_CHECKS_INTERVAL:-15}"
 done
-echo "The formula test dispatch was not found for commit $head." >&2
+echo "No formula test run became runnable for commit $head." >&2
 exit 1
