@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "usage: $0 PR_URL" >&2
+  exit 64
+fi
+
+# Only approve checks for this repository's generated formula pull requests.
+pr="$(gh pr view "$1" --json headRefName,headRefOid,isCrossRepository,author,state)"
+jq -e '.state == "OPEN" and .isCrossRepository == false and .author.login == "app/github-actions"' <<<"$pr" >/dev/null
+branch="$(jq -r .headRefName <<<"$pr")"
+head="$(jq -r .headRefOid <<<"$pr")"
+[[ "$branch" =~ ^automation/[a-z0-9]+-v[0-9]+\.[0-9]+\.[0-9]+$ && "$head" =~ ^[0-9a-f]{40}$ ]]
+approved_id=""
+
+for (( attempt=1; attempt<=${START_CHECKS_ATTEMPTS:-240}; attempt++ )); do
+  runs="$(gh run list --workflow test.yml --event pull_request --branch "$branch" \
+    --limit 100 --json databaseId,headSha,conclusion)"
+  run="$(jq -c --arg head "$head" '[.[] | select(.headSha == $head)][0] // empty' <<<"$runs")"
+  if [[ -n "$run" ]]; then
+    run_id="$(jq -r .databaseId <<<"$run")"
+    [[ "$run_id" =~ ^[0-9]+$ ]]
+    if [[ "$(jq -r .conclusion <<<"$run")" == action_required ]]; then
+      if [[ "$approved_id" != "$run_id" ]]; then
+        gh api --method POST "repos/{owner}/{repo}/actions/runs/$run_id/approve"
+        approved_id="$run_id"
+      fi
+    else
+      gh run watch "$run_id" --exit-status
+      exit 0
+    fi
+  fi
+  sleep "${START_CHECKS_INTERVAL:-15}"
+done
+echo "No formula test run became runnable for commit $head." >&2
+exit 1

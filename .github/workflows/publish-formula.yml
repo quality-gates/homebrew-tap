@@ -26,6 +26,7 @@ on:
         type: string
 
 permissions:
+  actions: write
   checks: read
   contents: write
   pull-requests: write
@@ -191,6 +192,13 @@ jobs:
           fi
           echo "url=$pr_url" >> "$GITHUB_OUTPUT"
           echo "Formula PR: $pr_url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Start formula checks
+        if: steps.change.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+        run: script/start-formula-checks "$PR_URL"
 
       - name: Wait for formula checks
         if: steps.change.outputs.changed == 'true'

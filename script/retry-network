@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -eq 0 ]]; then
+  echo "usage: $0 COMMAND [ARGUMENT ...]" >&2
+  exit 64
+fi
+
+output="$(mktemp)"
+trap 'rm -f "$output"' EXIT
+for attempt in 1 2 3; do
+  if "$@" >"$output" 2>&1; then
+    cat "$output"
+    exit 0
+  else
+    result=$?
+  fi
+  cat "$output" >&2
+  if [[ "$attempt" == 3 ]] || ! grep -Eiq \
+    'HTTP status code 5[0-9][0-9]|Could not resolve host|Connection timed out|Connection reset|The (homepage|source) URL .* is not reachable$' "$output"; then
+    exit "$result"
+  fi
+  echo "Network failure; retrying ($attempt/3)." >&2
+  sleep "${NETWORK_RETRY_INTERVAL:-15}"
+done

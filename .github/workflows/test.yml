@@ -48,7 +48,7 @@ jobs:
           set -euo pipefail
           for formula in Formula/*.rb; do
             tool="$(basename "$formula" .rb)"
-            brew audit --strict --online "quality-gates/tap/$tool"
+            script/retry-network brew audit --strict --online "quality-gates/tap/$tool"
             brew style "quality-gates/tap/$tool"
             brew install "quality-gates/tap/$tool"
             brew test "quality-gates/tap/$tool"
