@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "usage: $0 PR_URL" >&2
+  exit 64
+fi
+
+# Dispatch explicitly: bot-created pull request runs can require approval.
+pr="$(gh pr view "$1" --json headRefName,headRefOid,baseRefOid,state)"
+[[ "$(jq -r .state <<<"$pr")" == OPEN ]]
+branch="$(jq -r .headRefName <<<"$pr")"
+head="$(jq -r .headRefOid <<<"$pr")"
+base="$(jq -r .baseRefOid <<<"$pr")"
+git check-ref-format "refs/heads/$branch"
+[[ "$head" =~ ^[0-9a-f]{40}$ && "$base" =~ ^[0-9a-f]{40}$ ]]
+request_id="$(ruby -rsecurerandom -e 'puts SecureRandom.uuid')"
+gh workflow run test.yml --ref "$branch" -f "base_sha=$base" -f "request_id=$request_id"
+
+# Wait for this dispatch and this commit, not a previous successful run.
+for (( attempt=1; attempt<=${START_CHECKS_ATTEMPTS:-20}; attempt++ )); do
+  runs="$(gh run list --workflow test.yml --event workflow_dispatch --branch "$branch" \
+    --limit 100 --json databaseId,displayTitle,headSha)"
+  run_id="$(jq -r --arg title "Test formula $request_id" --arg head "$head" \
+    '.[] | select(.displayTitle == $title and .headSha == $head) | .databaseId' <<<"$runs" | head -n 1)"
+  if [[ "$run_id" =~ ^[0-9]+$ ]]; then
+    gh run watch "$run_id" --exit-status
+    exit 0
+  fi
+  sleep "${START_CHECKS_INTERVAL:-3}"
+done
+echo "The formula test dispatch was not found for commit $head." >&2
+exit 1

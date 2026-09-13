@@ -1,5 +1,4 @@
 # frozen_string_literal: true
-
 require "fileutils"
 require "minitest/autorun"
 require "open3"
@@ -9,97 +8,72 @@ class WaitForFormulaChecksTest < Minitest::Test
   SCRIPT = File.expand_path("../script/wait-for-formula-checks", __dir__)
 
   def test_succeeds_when_checks_register_after_extended_delay
-    with_fake_gh(succeed_on_attempt: 25) do |fake_bin, log, state_file|
-      env = {
-        "PATH" => "#{fake_bin}:#{ENV.fetch("PATH")}",
-        "GH_LOG" => log,
-        "STATE_FILE" => state_file,
-        "WAIT_FOR_CHECKS_INTERVAL" => "0"
-      }
-      pr_url = "https://github.com/quality-gates/homebrew-tap/pull/42"
-      stdout, stderr, status = Open3.capture3(env, SCRIPT, pr_url)
-
-      assert status.success?, "#{stdout}\n#{stderr}"
-      calls = File.read(log)
-      assert_includes calls, "pr checks #{pr_url} --watch --fail-fast --interval 0"
-    end
+    run_waiter(delay: 25) { |status, count, output| assert status.success?, output; assert_equal 25, count }
   end
 
   def test_times_out_when_checks_exceed_configured_max_attempts
-    with_fake_gh(succeed_on_attempt: 10) do |fake_bin, log, state_file|
-      env = {
-        "PATH" => "#{fake_bin}:#{ENV.fetch("PATH")}",
-        "GH_LOG" => log,
-        "STATE_FILE" => state_file,
-        "WAIT_FOR_CHECKS_ATTEMPTS" => "5",
-        "WAIT_FOR_CHECKS_INTERVAL" => "0"
-      }
-      pr_url = "https://github.com/quality-gates/homebrew-tap/pull/42"
-      _stdout, stderr, status = Open3.capture3(env, SCRIPT, pr_url)
-
+    run_waiter(delay: 10, attempts: 5) do |status, count, output|
       refute status.success?
-      assert_equal 1, status.exitstatus
-      assert_includes stderr, "No formula checks were registered for #{pr_url}."
+      assert_equal 5, count
+      assert_includes output, "No formula checks were registered"
     end
   end
 
   def test_succeeds_when_checks_register_immediately
-    with_fake_gh(succeed_on_attempt: 1) do |fake_bin, log, state_file|
-      env = {
-        "PATH" => "#{fake_bin}:#{ENV.fetch("PATH")}",
-        "GH_LOG" => log,
-        "STATE_FILE" => state_file,
-        "WAIT_FOR_CHECKS_INTERVAL" => "0"
-      }
-      pr_url = "https://github.com/quality-gates/homebrew-tap/pull/42"
-      stdout, stderr, status = Open3.capture3(env, SCRIPT, pr_url)
+    run_waiter(delay: 1) { |status, count, output| assert status.success?, output; assert_equal 1, count }
+  end
 
-      assert status.success?, "#{stdout}\n#{stderr}"
+  def test_waits_when_checks_disappear_before_watch_starts
+    run_waiter(delay: 2) { |status, count, output| assert status.success?, output; assert_equal 2, count }
+  end
+
+  def test_real_failed_checks_are_not_retried
+    run_waiter(delay: 1, error: "Install on macos-15 fail") do |status, count, _output|
+      refute status.success?
+      assert_equal 1, count
+    end
+  end
+
+  def test_authentication_failure_is_not_disguised_as_missing_checks
+    run_waiter(delay: 1, error: "HTTP 403: Resource not accessible") do |status, count, output|
+      refute status.success?
+      assert_equal 1, count
+      assert_includes output, "HTTP 403"
     end
   end
 
   private
 
-  def with_fake_gh(succeed_on_attempt:)
+  def run_waiter(delay:, attempts: 30, error: "")
     Dir.mktmpdir do |dir|
-      fake_bin = File.join(dir, "bin")
-      FileUtils.mkdir_p(fake_bin)
-      fake_gh = File.join(fake_bin, "gh")
-      log = File.join(dir, "gh.log")
-      state_file = File.join(dir, "attempt.count")
-      File.write(state_file, "0")
-
-      File.write(fake_gh, <<~'BASH')
+      state = File.join(dir, "count")
+      fake = File.join(dir, "gh")
+      File.write(fake, <<~'SH')
         #!/usr/bin/env bash
         set -euo pipefail
-        printf '%s\n' "$*" >> "$GH_LOG"
-
-        if [[ "$1" == "pr" && "$2" == "checks" ]]; then
-          if [[ "$*" == *"--watch"* ]]; then
-            exit 0
-          fi
-
-          count="$(cat "$STATE_FILE")"
-          count=$((count + 1))
-          echo "$count" > "$STATE_FILE"
-
-          if [[ $count -ge TARGET_ATTEMPT ]]; then
-            echo "1"
-            exit 0
-          else
-            echo "no checks reported on the branch" >&2
-            exit 1
-          fi
+        if [[ "$*" != *"--watch"* ]]; then
+          echo 1
+          exit 0
         fi
-
-        echo "unexpected gh call: $*" >&2
-        exit 1
-      BASH
-      content = File.read(fake_gh).gsub("TARGET_ATTEMPT", succeed_on_attempt.to_s)
-      File.write(fake_gh, content)
-      FileUtils.chmod(0o755, fake_gh)
-
-      yield fake_bin, log, state_file
+        count=$(cat "$STATE_FILE" 2>/dev/null || echo 0)
+        count=$((count + 1))
+        echo "$count" > "$STATE_FILE"
+        if ((count < CHECK_DELAY)); then
+          echo "no checks reported on the branch" >&2
+          exit 1
+        fi
+        if [[ -n "$CHECK_ERROR" ]]; then
+          echo "$CHECK_ERROR" >&2
+          exit 1
+        fi
+        echo "Install on macos-15 pass"
+      SH
+      FileUtils.chmod(0o755, fake)
+      env = {"PATH" => "#{dir}:#{ENV.fetch('PATH')}", "STATE_FILE" => state,
+             "CHECK_DELAY" => delay.to_s, "CHECK_ERROR" => error,
+             "WAIT_FOR_CHECKS_INTERVAL" => "0", "WAIT_FOR_CHECKS_ATTEMPTS" => attempts.to_s}
+      out, err, status = Open3.capture3(env, SCRIPT, "https://github.com/quality-gates/homebrew-tap/pull/75")
+      yield status, File.read(state).to_i, out + err
     end
   end
 end

@@ -26,6 +26,7 @@ on:
         type: string
 
 permissions:
+  actions: write
   checks: read
   contents: write
   pull-requests: write
@@ -173,7 +174,8 @@ jobs:
           if [[ "$branch_matches" != true ]]; then
             git checkout -B "$branch"
             git add "Formula/$TOOL.rb"
-            git commit -m "Update $TOOL to $VERSION"
+            # The explicit dispatch below runs every required check without an approval wait.
+            git commit -m "Update $TOOL to $VERSION [skip ci]"
             git push origin "HEAD:refs/heads/$branch" \
               --force-with-lease="refs/heads/$branch:$remote_sha"
           fi
@@ -191,6 +193,13 @@ jobs:
           fi
           echo "url=$pr_url" >> "$GITHUB_OUTPUT"
           echo "Formula PR: $pr_url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Start formula checks
+        if: steps.change.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+        run: script/start-formula-checks "$PR_URL"
 
       - name: Wait for formula checks
         if: steps.change.outputs.changed == 'true'

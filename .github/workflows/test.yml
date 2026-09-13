@@ -1,10 +1,20 @@
 name: Test tap
+run-name: ${{ inputs.request_id && format('Test formula {0}', inputs.request_id) || github.event.pull_request.title || github.event.head_commit.message || 'Test tap' }}
 
 on:
   pull_request:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      request_id:
+        description: Unique formula check dispatch identifier
+        required: false
+        type: string
+      base_sha:
+        description: Base commit for the candidate upgrade test
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -48,7 +58,7 @@ jobs:
           set -euo pipefail
           for formula in Formula/*.rb; do
             tool="$(basename "$formula" .rb)"
-            brew audit --strict --online "quality-gates/tap/$tool"
+            script/retry-network brew audit --strict --online "quality-gates/tap/$tool"
             brew style "quality-gates/tap/$tool"
             brew install "quality-gates/tap/$tool"
             brew test "quality-gates/tap/$tool"
@@ -58,7 +68,7 @@ jobs:
 
   upgrade:
     name: Upgrade changed formula on ${{ matrix.runner }}
-    if: ${{ github.event_name == 'pull_request' }}
+    if: ${{ github.event_name == 'pull_request' || inputs.base_sha != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -75,10 +85,11 @@ jobs:
       - name: Install predecessor and upgrade to candidate
         shell: bash
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha }}
         run: |
           set -euo pipefail
           test "$(uname -m)" = "${{ matrix.machine }}"
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           changed="$(git diff --name-only "$BASE_SHA" HEAD -- 'Formula/*.rb')"
           if [[ -z "$changed" ]]; then
             echo "No formula changed; upgrade test is not applicable." >> "$GITHUB_STEP_SUMMARY"

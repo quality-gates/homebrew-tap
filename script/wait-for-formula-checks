@@ -10,19 +10,22 @@ pr_url="$1"
 max_attempts="${WAIT_FOR_CHECKS_ATTEMPTS:-240}"
 interval="${WAIT_FOR_CHECKS_INTERVAL:-15}"
 
-checks_found=false
+output="$(mktemp)"
+trap 'rm -f "$output"' EXIT
 for (( attempt=1; attempt<=max_attempts; attempt++ )); do
-  check_count="$(gh pr checks "$pr_url" --json name --jq 'length' 2>/dev/null || true)"
-  if [[ "$check_count" =~ ^[1-9][0-9]*$ ]]; then
-    checks_found=true
-    break
+  if gh pr checks "$pr_url" --watch --fail-fast --interval "$interval" >"$output" 2>&1; then
+    cat "$output"
+    exit 0
+  else
+    result=$?
+  fi
+  cat "$output" >&2
+  # A branch update can temporarily remove its check runs.
+  if ! grep -Fq 'no checks reported on' "$output"; then
+    exit "$result"
   fi
   sleep "$interval"
 done
 
-if [[ "$checks_found" != true ]]; then
-  echo "No formula checks were registered for $pr_url." >&2
-  exit 1
-fi
-
-gh pr checks "$pr_url" --watch --fail-fast --interval "$interval"
+echo "No formula checks were registered for $pr_url." >&2
+exit 1
