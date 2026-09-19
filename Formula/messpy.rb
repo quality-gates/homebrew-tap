@@ -6,13 +6,13 @@ class Messpy < Formula
 
   on_macos do
     on_arm do
-      url "https://github.com/quality-gates/messpy/releases/download/v0.1.13/messpy_0.1.13_darwin_arm64.tar.gz?version=0.1.13"
-      sha256 "784c2a98b43bf693638a8b73362969dd1696791d6ce10613739e9b2abc68b795"
+      url "https://github.com/quality-gates/messpy/releases/download/v0.1.14/messpy_0.1.14_darwin_arm64.tar.gz?version=0.1.14"
+      sha256 "652613aa1c04e16763c729cfe204218d28e94458a7efcfd1245b70944131aa22"
     end
 
     on_intel do
-      url "https://github.com/quality-gates/messpy/releases/download/v0.1.13/messpy_0.1.13_darwin_amd64.tar.gz?version=0.1.13"
-      sha256 "d49ebcd930f74c8070cb33d8ae364e4ba95405d9fb3b22b5e4cc9b89a8affa43"
+      url "https://github.com/quality-gates/messpy/releases/download/v0.1.14/messpy_0.1.14_darwin_amd64.tar.gz?version=0.1.14"
+      sha256 "ff902e797a86df69731d03ad84fe15c168788ad90227b5217874b1d9357497cb"
     end
   end
 
@@ -22,6 +22,6 @@ class Messpy < Formula
   end
 
   test do
-    assert_match "0.1.13", shell_output("#{bin}/messpy --version")
+    assert_match "0.1.14", shell_output("#{bin}/messpy --version")
   end
 end
