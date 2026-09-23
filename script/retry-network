@@ -17,7 +17,7 @@ for attempt in 1 2 3; do
   fi
   cat "$output" >&2
   if [[ "$attempt" == 3 ]] || ! grep -Eiq \
-    'HTTP status code 5[0-9][0-9]|Could not resolve host|Connection timed out|Connection reset|The (homepage|source) URL .* is not reachable$' "$output"; then
+    'HTTP status code 5[0-9][0-9]|Could not resolve host|Connection timed out|Connection reset|no assets to download|The (homepage|source) URL .* is not reachable$' "$output"; then
     exit "$result"
   fi
   echo "Network failure; retrying ($attempt/3)." >&2

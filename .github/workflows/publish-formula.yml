@@ -93,7 +93,7 @@ jobs:
           fi
 
           mkdir dist
-          gh release download "$TAG" --repo "quality-gates/$TOOL" --dir dist \
+          script/retry-network gh release download "$TAG" --repo "quality-gates/$TOOL" --dir dist \
             --pattern "$AMD64_ASSET" --pattern "$ARM64_ASSET" --pattern checksums.txt
           expected_manifest="$(printf '%s\n' "$AMD64_ASSET" "$ARM64_ASSET" | LC_ALL=C sort)"
           manifest_assets="$(awk 'NF == 2 { sub(/^\*/, "", $2); print $2 }' dist/checksums.txt | LC_ALL=C sort)"
