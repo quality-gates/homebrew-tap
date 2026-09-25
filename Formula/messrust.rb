@@ -6,13 +6,13 @@ class Messrust < Formula
 
   on_macos do
     on_arm do
-      url "https://github.com/quality-gates/messrust/releases/download/v0.1.12/messrust_0.1.12_darwin_arm64.tar.gz?version=0.1.12"
-      sha256 "7440dfc1b1d1022ed94d57a31b811d5c65851f3b476025ec4534a405cebee4f8"
+      url "https://github.com/quality-gates/messrust/releases/download/v0.1.13/messrust_0.1.13_darwin_arm64.tar.gz?version=0.1.13"
+      sha256 "f5796a2876049b0058569ea7f66bb2f748aafda45c9c887ecae31e74c79002ff"
     end
 
     on_intel do
-      url "https://github.com/quality-gates/messrust/releases/download/v0.1.12/messrust_0.1.12_darwin_amd64.tar.gz?version=0.1.12"
-      sha256 "a03b7330defba03887708ba10b7077d0e6ea300c9e60f44e796cd932c230252a"
+      url "https://github.com/quality-gates/messrust/releases/download/v0.1.13/messrust_0.1.13_darwin_amd64.tar.gz?version=0.1.13"
+      sha256 "0f3dd2d99a76507e6f6787b302ad50589b863244fc7b653ae3b88d09f350dc81"
     end
   end
 
@@ -22,6 +22,6 @@ class Messrust < Formula
   end
 
   test do
-    assert_match "0.1.12", shell_output("#{bin}/messrust --version")
+    assert_match "0.1.13", shell_output("#{bin}/messrust --version")
   end
 end
