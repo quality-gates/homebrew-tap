@@ -6,13 +6,13 @@ class Messharp < Formula
 
   on_macos do
     on_arm do
-      url "https://github.com/quality-gates/messharp/releases/download/v0.2.20/messharp_0.2.20_darwin_arm64.tar.gz?version=0.2.20"
-      sha256 "c164ee61a728bf72e134a7131bd28ab437877a4ef40c485dd2a530a92515f47c"
+      url "https://github.com/quality-gates/messharp/releases/download/v0.2.21/messharp_0.2.21_darwin_arm64.tar.gz?version=0.2.21"
+      sha256 "94a805fcfa2d0d14ba6e7790ffb36160a57a670a3f8cd889323c29c0123072b9"
     end
 
     on_intel do
-      url "https://github.com/quality-gates/messharp/releases/download/v0.2.20/messharp_0.2.20_darwin_amd64.tar.gz?version=0.2.20"
-      sha256 "7ab231d723dd0ec6c4d7920f8c5cd0de09d03027f891bf8d039df7453f5e2e0f"
+      url "https://github.com/quality-gates/messharp/releases/download/v0.2.21/messharp_0.2.21_darwin_amd64.tar.gz?version=0.2.21"
+      sha256 "f39187bc44c925ab2dab1463bb9edb28aedcf2f63372434c3fa20cd5c63466fd"
     end
   end
 
@@ -22,6 +22,6 @@ class Messharp < Formula
   end
 
   test do
-    assert_match "0.2.20", shell_output("#{bin}/messharp --version")
+    assert_match "0.2.21", shell_output("#{bin}/messharp --version")
   end
 end
