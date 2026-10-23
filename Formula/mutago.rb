@@ -6,13 +6,13 @@ class Mutago < Formula
 
   on_macos do
     on_arm do
-      url "https://github.com/quality-gates/mutago/releases/download/v2.10.37/mutago_2.10.37_darwin_arm64.tar.gz?version=2.10.37"
-      sha256 "0b3ed62899ba8b73efb398e3f6305500ff375ea5d7ab07d4a90195c40a89c536"
+      url "https://github.com/quality-gates/mutago/releases/download/v2.10.38/mutago_2.10.38_darwin_arm64.tar.gz?version=2.10.38"
+      sha256 "0e0acecc7b519c38d089cacef43afda42482e8e12fdc1ff88c3db361dc4e2676"
     end
 
     on_intel do
-      url "https://github.com/quality-gates/mutago/releases/download/v2.10.37/mutago_2.10.37_darwin_amd64.tar.gz?version=2.10.37"
-      sha256 "7c629c48483dd538032758466e8d74156c7f36bb522fb1c83b8a531d11e1c0d2"
+      url "https://github.com/quality-gates/mutago/releases/download/v2.10.38/mutago_2.10.38_darwin_amd64.tar.gz?version=2.10.38"
+      sha256 "425cf649989233f37cd2a9feb2983e8a85ae76c86651b353f3334a6c34687dcd"
     end
   end
 
@@ -22,6 +22,6 @@ class Mutago < Formula
   end
 
   test do
-    assert_match "2.10.37", shell_output("#{bin}/mutago --version")
+    assert_match "2.10.38", shell_output("#{bin}/mutago --version")
   end
 end
