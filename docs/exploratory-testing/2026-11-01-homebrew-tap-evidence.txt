@@ -1,4 +1,5 @@
-Exploratory pass, 2026-11-01 UTC
+Abbreviated command and output summary, 2026-11-01 UTC
+Paths and checksums in angle brackets are placeholders, not shell syntax.
 Base: 0da12e61efb5d7009334900068704d25eaf7f951
 Host: Ubuntu x86_64, Ruby 3.3.8 extracted locally
 

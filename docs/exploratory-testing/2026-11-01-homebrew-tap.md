@@ -2,9 +2,9 @@
 
 ## Scope and starting state
 
-The pass used commit `0da12e61efb5d7009334900068704d25eaf7f951` on 2026-11-01. The host was Ubuntu x86_64, without Homebrew or macOS. The worktree was clean before setup. Temporary Ruby packages, release archives, generated formulas, and test output stayed in the worktree. The repository has no dependency lockfile for the Ruby scripts. Ruby 3.3.8 was extracted from Ubuntu packages without a system install.
+The pass used commit `0da12e61efb5d7009334900068704d25eaf7f951` on 2026-11-01. The host was Ubuntu x86_64, without Homebrew or macOS. The worktree was clean before setup. Temporary Ruby packages, release archives, and generated formulas stayed in the worktree. The first suite run did not set `TMPDIR`, so its temporary test directories may have been outside the worktree. The successful rerun set `TMPDIR` inside the worktree. The repository has no dependency lockfile for the Ruby scripts. Ruby 3.3.8 was extracted from Ubuntu packages without a system install.
 
-No processes, browsers, containers, images, volumes, or listening ports were started for this pass. The worktree was the only persistent test resource.
+No background processes, browsers, containers, images, volumes, or listening ports were started for this pass. The worktree was the only persistent test resource. A cleanup harness was not registered before creating it.
 
 ## Results
 
