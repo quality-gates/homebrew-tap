@@ -36,3 +36,6 @@ The `Publish mess formula` workflow records the exact release identity and
 deterministic automation branch. Rerun a source repository's `Release` workflow
 with the same tag to redispatch a failed publication. Do not delete or change a
 valid immutable GitHub release to recover a tap failure.
+
+See the [exploratory testing report](docs/exploratory-testing/2026-11-01-homebrew-tap.md)
+for release and installation evidence.
