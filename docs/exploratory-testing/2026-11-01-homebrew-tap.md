@@ -8,7 +8,11 @@ No background processes, browsers, containers, images, volumes, or listening por
 
 ## Results
 
-No product bug was confirmed. The GitHub issue list contained no open or closed issues on 2026-11-01. A search for prior `mutarust` README work found no matching pull requests. [PR 35](https://github.com/quality-gates/homebrew-tap/pull/35) added `mutarust` and recorded a macOS install.
+The GitHub issue list contained no open or closed issues before filing on 2026-11-01. A search for prior `mutarust` README work found no matching pull requests. [PR 35](https://github.com/quality-gates/homebrew-tap/pull/35) added `mutarust` and recorded a macOS install.
+
+### Confirmed: macOS formula checks reject the tap
+
+[Issue 165](https://github.com/quality-gates/homebrew-tap/issues/165) records a required CI failure that blocks pull requests. On fresh macOS Apple Silicon runners, the workflow taps the candidate repository and then audits its first formula. Homebrew refuses to load `messcript` from the untrusted tap. The expected result is that the workflow audits and installs the formulas. The same failure appeared in [the first run](https://github.com/quality-gates/homebrew-tap/actions/runs/41261501214/job/124715531000) and [a fresh run](https://github.com/quality-gates/homebrew-tap/actions/runs/41261774571/job/124716322484). The latter also failed on [macOS 26](https://github.com/quality-gates/homebrew-tap/actions/runs/41261774571/job/124716322544). This confirms a CI problem, not a failure of the documented end-user install command.
 
 ### Install and verify a tool
 
