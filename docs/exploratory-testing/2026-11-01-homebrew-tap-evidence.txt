@@ -1,0 +1,40 @@
+Exploratory pass, 2026-11-01 UTC
+Base: 0da12e61efb5d7009334900068704d25eaf7f951
+Host: Ubuntu x86_64, Ruby 3.3.8 extracted locally
+
+$ gh api repos/quality-gates/messgo/releases/tags/v0.5.11
+id=416649539 immutable=true draft=false prerelease=false
+assets: checksums.txt, messgo_0.5.11_darwin_amd64.tar.gz, messgo_0.5.11_darwin_arm64.tar.gz
+$ gh release download v0.5.11 -R quality-gates/messgo -D <scratch>/messgo -p checksums.txt -p '*darwin_amd64.tar.gz' -p '*darwin_arm64.tar.gz'
+$ (cd <scratch>/messgo && sha256sum -c checksums.txt)
+messgo_0.5.11_darwin_arm64.tar.gz: OK
+messgo_0.5.11_darwin_amd64.tar.gz: OK
+
+$ gh api repos/quality-gates/mutago/releases/tags/v2.10.40
+id=424315189 immutable=true draft=false prerelease=false
+assets: checksums.txt, mutago_2.10.40_darwin_amd64.tar.gz, mutago_2.10.40_darwin_arm64.tar.gz
+$ gh release download v2.10.40 -R quality-gates/mutago -D <scratch>/mutago -p checksums.txt -p '*darwin_amd64.tar.gz' -p '*darwin_arm64.tar.gz'
+$ (cd <scratch>/mutago && sha256sum -c checksums.txt)
+mutago_2.10.40_darwin_arm64.tar.gz: OK
+mutago_2.10.40_darwin_amd64.tar.gz: OK
+
+For each tool, use sha256sum on the two downloaded archives for ARM and Intel, then run:
+$ script/render-formula <tool> <version> <arm-sha256> <intel-sha256> <scratch>/<tool>.rb
+$ cmp Formula/<tool>.rb <scratch>/<tool>.rb
+$ script/formula-version <scratch>/<tool>.rb
+messgo generated formula matches committed formula; extracted version=0.5.11
+mutago generated formula matches committed formula; extracted version=2.10.40
+
+For two fresh output paths:
+$ script/render-formula messgo 0.5.11-rc1 <64-a-characters> <64-b-characters> <scratch>/invalid-<attempt>/formula.rb
+invalid stable semantic version (ArgumentError)
+No formula file was written in either attempt.
+
+$ ruby script/tool_registry.rb validate nonexistent
+unsupported tool: nonexistent (ArgumentError)
+$ ruby script/formula_inventory.rb Formula
+Inventory accepted, exit 0.
+$ ruby -Itest -e 'Dir["test/**/*_test.rb"].sort.each { |file| require File.expand_path(file) }'
+45 runs, 266 assertions, 0 failures, 0 errors, 0 skips
+
+The first suite run had four failures because the locally extracted Ruby was absent from PATH for child processes. The passing run added it to PATH. The local host did not run Homebrew.
