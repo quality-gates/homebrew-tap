@@ -42,6 +42,9 @@ jobs:
         run: |
           test "$(uname -m)" = "${{ matrix.machine }}"
           brew tap quality-gates/tap "$GITHUB_WORKSPACE"
+          if brew command trust >/dev/null 2>&1; then
+            brew trust quality-gates/tap
+          fi
       - name: Audit, install, and test formulas
         shell: bash
         run: |
@@ -110,6 +113,9 @@ jobs:
           tool="$(basename "$changed" .rb)"
           candidate_sha="$(git rev-parse HEAD)"
           brew tap quality-gates/tap "$GITHUB_WORKSPACE"
+          if brew command trust >/dev/null 2>&1; then
+            brew trust quality-gates/tap
+          fi
           tap_dir="$(brew --repo quality-gates/tap)"
           if ! git -C "$tap_dir" cat-file -e "$BASE_SHA:Formula/$tool.rb" 2>/dev/null; then
             if [[ -z "$(git -C "$tap_dir" rev-list -n 1 "$BASE_SHA" -- "Formula/$tool.rb")" ]]; then
