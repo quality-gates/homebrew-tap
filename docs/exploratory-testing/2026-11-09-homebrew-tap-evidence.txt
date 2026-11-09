@@ -1,0 +1,112 @@
+$ ruby -v
+ruby 3.3.8 (2025-04-09 revision b200bad6cd) [x86_64-linux-gnu]
+$ ruby script/formula_inventory.rb Formula
+exit=0
+$ ruby -Itest -e ...
+Run options: --seed 25659
+
+# Running:
+
+................................................
+
+Finished in 8.551921s, 5.6128 runs/s, 35.7814 assertions/s.
+
+48 runs, 306 assertions, 0 failures, 0 errors, 0 skips
+### mutago 2.10.42
+tag=v2.10.42 draft=false prerelease=false immutable=true
+mutago_2.10.42_darwin_amd64.tar.gz: OK
+mutago_2.10.42_darwin_arm64.tar.gz: OK
+formula version: 2.10.42
+e98553de43314af5273d2d1bd6d6fd641c259769187506debcf410d77a48a531  .scratch/assets/mutago/mutago_2.10.42_darwin_arm64.tar.gz
+LICENSE
+mutago
+19a908df98adbb6cd254b09639427d3ecda17d1458d89de9f2e5a7a8387b23d1  .scratch/assets/mutago/mutago_2.10.42_darwin_amd64.tar.gz
+LICENSE
+mutago
+render matches checked-in formula
+### mutarust 0.1.4
+tag=v0.1.4 draft=false prerelease=false immutable=false
+mutarust_0.1.4_darwin_amd64.tar.gz: OK
+mutarust_0.1.4_darwin_arm64.tar.gz: OK
+formula version: 0.1.4
+1d03051d6bd8439054df085080bb3349496783136ae867ed1530946343bd88b4  .scratch/assets/mutarust/mutarust_0.1.4_darwin_arm64.tar.gz
+LICENSE
+mutarust
+c7f556c2b8dd7eec89a9268f612670a6b4ff51ca8096bac4ef5c696b5b8553b5  .scratch/assets/mutarust/mutarust_0.1.4_darwin_amd64.tar.gz
+LICENSE
+mutarust
+render matches checked-in formula
+### Release immutability replay for every formula
+https://github.com/quality-gates/messcript/releases/tag/v0.1.21 draft=false prerelease=false immutable=true
+https://github.com/quality-gates/messfsharp/releases/tag/v0.1.17 draft=false prerelease=false immutable=true
+https://github.com/quality-gates/messgo/releases/tag/v0.5.13 draft=false prerelease=false immutable=true
+https://github.com/quality-gates/messharp/releases/tag/v0.2.23 draft=false prerelease=false immutable=true
+https://github.com/quality-gates/messpy/releases/tag/v0.1.24 draft=false prerelease=false immutable=true
+https://github.com/quality-gates/messrust/releases/tag/v0.1.17 draft=false prerelease=false immutable=true
+https://github.com/quality-gates/mutago/releases/tag/v2.10.42 draft=false prerelease=false immutable=true
+https://github.com/quality-gates/mutarust/releases/tag/v0.1.4 draft=false prerelease=false immutable=false
+### mutarust repeat
+{"assets":["checksums.txt","mutarust_0.1.4_darwin_amd64.tar.gz","mutarust_0.1.4_darwin_arm64.tar.gz"],"draft":false,"html_url":"https://github.com/quality-gates/mutarust/releases/tag/v0.1.4","id":382128190,"immutable":false,"prerelease":false,"tag_name":"v0.1.4"}
+### Generator variation and replay
+attempt=1 exit=1 file_exists=no
+script/render-formula:15:in `render': invalid stable semantic version (ArgumentError)
+
+attempt=2 exit=1 file_exists=no
+script/render-formula:15:in `render': invalid stable semantic version (ArgumentError)
+
+### Documented install and upgrade prerequisites
+$ brew install quality-gates/tap/mutago
+bash: line 1: brew: command not found
+exit=127
+$ brew tap quality-gates/tap
+bash: line 1: brew: command not found
+exit=127
+$ brew update
+bash: line 1: brew: command not found
+exit=127
+$ brew upgrade mutago
+bash: line 1: brew: command not found
+exit=127
+### Idempotent rendering
+re-render comparison exit=0
+### Explicit replay commands (downloads from GitHub release assets)
+$ gh api repos/quality-gates/mutago/releases/tags/v2.10.42 --jq '{tag_name,draft,prerelease,immutable,html_url}'
+{"draft":false,"html_url":"https://github.com/quality-gates/mutago/releases/tag/v2.10.42","immutable":true,"prerelease":false,"tag_name":"v2.10.42"}
+$ gh release download v2.10.42 -R quality-gates/mutago -D .scratch/replay-mutago -p '*darwin*.tar.gz' -p checksums.txt
+$ (cd .scratch/replay-mutago && sha256sum -c checksums.txt)
+mutago_2.10.42_darwin_amd64.tar.gz: OK
+mutago_2.10.42_darwin_arm64.tar.gz: OK
+$ script/render-formula mutago 2.10.42 e98553de43314af5273d2d1bd6d6fd641c259769187506debcf410d77a48a531 19a908df98adbb6cd254b09639427d3ecda17d1458d89de9f2e5a7a8387b23d1 .scratch/replay-mutago/formula.rb
+$ cmp Formula/mutago.rb .scratch/replay-mutago/formula.rb
+exit=0
+$ gh api repos/quality-gates/mutarust/releases/tags/v0.1.4 --jq '{tag_name,draft,prerelease,immutable,html_url}'
+{"draft":false,"html_url":"https://github.com/quality-gates/mutarust/releases/tag/v0.1.4","immutable":false,"prerelease":false,"tag_name":"v0.1.4"}
+$ gh release download v0.1.4 -R quality-gates/mutarust -D .scratch/replay-mutarust -p '*darwin*.tar.gz' -p checksums.txt
+$ (cd .scratch/replay-mutarust && sha256sum -c checksums.txt)
+mutarust_0.1.4_darwin_amd64.tar.gz: OK
+mutarust_0.1.4_darwin_arm64.tar.gz: OK
+$ script/render-formula mutarust 0.1.4 1d03051d6bd8439054df085080bb3349496783136ae867ed1530946343bd88b4 c7f556c2b8dd7eec89a9268f612670a6b4ff51ca8096bac4ef5c696b5b8553b5 .scratch/replay-mutarust/formula.rb
+$ cmp Formula/mutarust.rb .scratch/replay-mutarust/formula.rb
+exit=0
+$ script/render-formula mutago 2.10.42-rc1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa .scratch/replay-invalid-1.rb
+script/render-formula:15:in `render': invalid stable semantic version (ArgumentError)
+
+exit=1 file_exists=no
+$ script/render-formula mutago 2.10.42-rc1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa .scratch/replay-invalid-2.rb
+script/render-formula:15:in `render': invalid stable semantic version (ArgumentError)
+
+exit=1 file_exists=no
+$ gh api repos/quality-gates/mutarust/releases/tags/v0.2.1 --jq ...
+{"assets":[],"draft":false,"immutable":false,"prerelease":false,"tag_name":"v0.2.1"}
+$ gh run view 42418239860 --json conclusion,jobs
+{"conclusion":"success","jobs":[{"conclusion":"success","name":"Install on macos-26-intel"},{"conclusion":"success","name":"Install on macos-15-intel"},{"conclusion":"success","name":"Install on macos-26"},{"conclusion":"success","name":"Install on macos-15"},{"conclusion":"success","name":"Test formula generator"},{"conclusion":"skipped","name":"Upgrade changed formula on ${{ matrix.runner }}"}]}
+$ gh pr checks 178
+Install on macos-15	pass	1m52s	https://github.com/quality-gates/homebrew-tap/actions/runs/42417502655/job/128538715909
+Install on macos-15-intel	pass	4m1s	https://github.com/quality-gates/homebrew-tap/actions/runs/42417502655/job/128538716177
+Install on macos-26	pass	1m59s	https://github.com/quality-gates/homebrew-tap/actions/runs/42417502655/job/128538715929
+Install on macos-26-intel	pass	3m43s	https://github.com/quality-gates/homebrew-tap/actions/runs/42417502655/job/128538716027
+Test formula generator	pass	8s	https://github.com/quality-gates/homebrew-tap/actions/runs/42417502655/job/128538715972
+Upgrade changed formula on macos-15	pass	17s	https://github.com/quality-gates/homebrew-tap/actions/runs/42417502655/job/128538715950
+Upgrade changed formula on macos-15-intel	pass	37s	https://github.com/quality-gates/homebrew-tap/actions/runs/42417502655/job/128538715805
+$ gh issue view 179 --json url,state,labels,title
+{"labels":[{"id":"LA_kwDOTZt8JM8AAAACr4nIeg","name":"bug","description":"Something isn't working","color":"d73a4a"},{"id":"LA_kwDOTZt8JM8AAAAC7au0Qw","name":"needs-triage","description":"Maintainer needs to evaluate this issue","color":"E4E669"}],"state":"OPEN","title":"mutarust formula points to a mutable release","url":"https://github.com/quality-gates/homebrew-tap/issues/179"}
